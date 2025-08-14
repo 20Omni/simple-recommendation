@@ -39,7 +39,7 @@ def update_watched(username, watched_list):
 # ========= LOAD MODEL =========
 @st.cache_resource
 def load_model():
-    df = joblib.load("movies_df.pkl")  # Assume Poster_Link exists but we will ignore posters
+    df = joblib.load("movies_df.pkl")  # Poster_Link ignored
     cosine_sim = joblib.load("cosine_similarity.pkl")
     indices = joblib.load("title_indices.pkl")
     return df, cosine_sim, indices
@@ -92,29 +92,59 @@ def recommend_for_user(preferred_genres, watched_titles, top_n=10):
 
     return mixed_df[['Series_Title', 'Genre', 'IMDB_Rating']]
 
-# ========= STAR RATING UX =========
-def star_rating(rating):
-    filled_stars = int(round(rating / 2))  # IMDb 1-10 scale to 5 stars approx
-    stars = "⭐" * filled_stars + "✩" * (5 - filled_stars)
-    return stars
-
-# ========= NICE MOVIE CARD NO POSTER =========
-def movie_card_no_poster(row, watched_list, username, section, reason=None, show_button=True):
-    # Boxed card style using st.markdown + container + css
-    movie_title = row['Series_Title']
-    genre = row['Genre']
-    rating = row['IMDB_Rating']
-    stars = star_rating(rating)
-
+# ========= MOVIE CARD =========
+def movie_card(row, watched_list, username, section, reason=None, show_button=True):
     card_style = """
     <style>
     .movie-card {
-        border: 1px solid #ccc;
+        border: 1px solid #ddd;
         border-radius: 10px;
-        padding: 15px;
-        margin-bottom: 15px;
-        background: #f9f9f9;
-        box-shadow: 2px 2px 6px rgb(200 200 200 / 0.5);
+        padding: 16px;
+        margin-bottom: 12px;
+        background-color: #fefefe;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.07);
+        transition: box-shadow 0.2s ease;
+    }
+    .movie-card:hover {
+        box-shadow: 0 5px 15px rgba(0,0,0,0.15);
+    }
+    .movie-title {
+        font-size: 1.3rem;
+        font-weight: 600;
+        margin-bottom: 4px;
+    }
+    .movie-genres {
+        font-size: 0.9rem;
+        color: #555;
+        margin-bottom: 6px;
+        font-style: italic;
+    }
+    .movie-rating {
+        font-size: 1.2rem;
+        color: #f39c12;
+        margin-bottom: 6px;
+    }
+    .reason-text {
+        font-size: 0.85rem;
+        color: #31708f;
+        margin-bottom: 10px;
+    }
+    .watched-btn {
+        background-color: #1f77b4;
+        color: white;
+        border: none;
+        padding: 6px 14px;
+        border-radius: 22px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+    }
+    .watched-btn:hover {
+        background-color: #105a8b;
+    }
+    .watched-btn:disabled {
+        background-color: #999;
+        cursor: not-allowed;
     }
     </style>
     """
@@ -122,24 +152,29 @@ def movie_card_no_poster(row, watched_list, username, section, reason=None, show
     st.markdown(card_style, unsafe_allow_html=True)
     with st.container():
         st.markdown(f'<div class="movie-card">', unsafe_allow_html=True)
-        col1, col2 = st.columns([6, 1])
-        with col1:
-            st.markdown(f"### {movie_title}")
-            st.markdown(f"**Genres:** {genre}")
-            st.markdown(f"**Rating:** {stars} ({rating:.1f}/10)")
-            if reason:
-                st.caption(f"💡 {reason}")
-        with col2:
-            key = f"watched_btn_{section}_{row.name}"
-            if movie_title in watched_list:
-                st.button("Watched", key=key, disabled=True)
-            elif show_button:
-                if st.button("Mark as Watched", key=key):
-                    watched_list.append(movie_title)
-                    update_watched(username, watched_list)
-                    st.success(f"Added '{movie_title}' ✅")
-                    st.rerun()
-        st.markdown("</div>", unsafe_allow_html=True)
+
+        st.markdown(f'<div class="movie-title">{row["Series_Title"]}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="movie-genres">{row["Genre"]}</div>', unsafe_allow_html=True)
+        # Show exactly ONE star for rating simplicity
+        st.markdown(f'<div class="movie-rating">⭐</div>', unsafe_allow_html=True)
+
+        if reason:
+            st.markdown(f'<div class="reason-text">💡 {reason}</div>', unsafe_allow_html=True)
+
+        key = f"watched_btn_{section}_{row.name}"
+        if row['Series_Title'] in watched_list:
+            st.markdown(
+                f'<button class="watched-btn" disabled>Watched</button>',
+                unsafe_allow_html=True
+            )
+        elif show_button:
+            if st.button("Mark as Watched", key=key):
+                watched_list.append(row['Series_Title'])
+                update_watched(username, watched_list)
+                st.success(f"Added '{row['Series_Title']}' ✅")
+                st.rerun()
+
+        st.markdown('</div>', unsafe_allow_html=True)
 
 # ========= SESSION STATE =========
 if "auth" not in st.session_state:
@@ -202,12 +237,10 @@ def dashboard():
 
     tab1, tab2, tab3 = st.tabs(["⭐ Top Rated", "🎥 Your Watching", "🎯 Recommendations"])
 
-    # Top Rated tab
+    # --- Top Rated ---
     with tab1:
         st.subheader("Top IMDb Rated Movies (Mixed Genres)")
         top_movies = df.sort_values(by="IMDB_Rating", ascending=False)
-
-        # Include variety: sample 3 movies from each genre found
         genre_set = set()
         for g_list in df['Genre'].str.split(', '):
             genre_set.update(g_list)
@@ -220,40 +253,53 @@ def dashboard():
         mixed_df = mixed_df.sort_values(by="IMDB_Rating", ascending=False).head(50)
 
         for _, row in mixed_df.iterrows():
-            movie_card_no_poster(row, st.session_state.watched, st.session_state.username, "top")
+            movie_card(row, st.session_state.watched, st.session_state.username, "top")
 
-    # Your Watching tab
+    # --- Your Watching ---
     with tab2:
         st.subheader("Your Watched Movies")
         if st.session_state.watched:
             watched_df = df[df['Series_Title'].isin(st.session_state.watched)]
             for _, row in watched_df.iterrows():
-                # Minimal card, no button, no poster
-                movie_title = row['Series_Title']
-                genre = row['Genre']
-                rating = row['IMDB_Rating']
-                stars = star_rating(rating)
+                # Minimal card, no buttons
                 card_style = """
                 <style>
                 .movie-card-minimal {
                     border: 1px solid #ddd;
-                    border-radius: 8px;
-                    padding: 10px;
-                    margin-bottom: 10px;
-                    background: #fafafa;
+                    border-radius: 10px;
+                    padding: 16px;
+                    margin-bottom: 12px;
+                    background-color: #fefefe;
+                    box-shadow: 0 2px 5px rgba(0,0,0,0.07);
+                }
+                .movie-title-minimal {
+                    font-size: 1.3rem;
+                    font-weight: 600;
+                    margin-bottom: 4px;
+                }
+                .movie-genres-minimal {
+                    font-size: 0.9rem;
+                    color: #555;
+                    margin-bottom: 6px;
+                    font-style: italic;
+                }
+                .movie-rating-minimal {
+                    font-size: 1.2rem;
+                    color: #f39c12;
+                    margin-bottom: 6px;
                 }
                 </style>
                 """
                 st.markdown(card_style, unsafe_allow_html=True)
                 st.markdown(f'<div class="movie-card-minimal">', unsafe_allow_html=True)
-                st.markdown(f"### {movie_title}")
-                st.markdown(f"Genres: {genre}")
-                st.markdown(f"Rating: {stars} ({rating:.1f}/10)")
+                st.markdown(f'<div class="movie-title-minimal">{row["Series_Title"]}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="movie-genres-minimal">{row["Genre"]}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="movie-rating-minimal">⭐</div>', unsafe_allow_html=True)
                 st.markdown("</div>", unsafe_allow_html=True)
         else:
             st.info("No watched movies yet.")
 
-    # Recommendations tab
+    # --- Recommendations ---
     with tab3:
         st.subheader("Recommended for You")
         if not st.session_state.genres and not st.session_state.watched:
@@ -284,9 +330,9 @@ def dashboard():
 
                 reason_text = " and ".join(reasons_list) if reasons_list else None
 
-                movie_card_no_poster(row, st.session_state.watched, st.session_state.username, "rec", reason=reason_text)
+                movie_card(row, st.session_state.watched, st.session_state.username, "rec", reason=reason_text, show_button=True)
 
-# ========= APP ROUTER =========
+# ========= APP ENTRY =========
 if not st.session_state.auth:
     login_signup_page()
 else:
