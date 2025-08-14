@@ -23,7 +23,7 @@ def save_user_data(data):
 def signup_user(username, genres):
     data = load_user_data()
     if username in data:
-        return False  # already exists
+        return False  # user exists
     data[username] = {"genres": genres, "watched": []}
     save_user_data(data)
     return True
@@ -51,13 +51,21 @@ df, cosine_sim, indices = load_model()
 # ========= RECOMMENDER =========
 def recommend_for_user(preferred_genres, watched_titles, top_n=10):
     scores = np.zeros(len(df))
-    genre_weight = 1.0
-    watch_weight = 2.0
 
+    # ADAPTIVE WEIGHTS: if no watched => rely on genres, else rely on watched movies
+    if watched_titles:
+        genre_weight = 0.5
+        watch_weight = 3.0
+    else:
+        genre_weight = 2.0
+        watch_weight = 0.0
+
+    # Boost for signup genres
     for genre in preferred_genres:
         mask = df['Genre'].str.contains(genre, case=False, na=False)
         scores[mask] += genre_weight
 
+    # Boost for movies similar to watched
     for title in watched_titles:
         if title in indices:
             idx = indices[title]
@@ -67,6 +75,7 @@ def recommend_for_user(preferred_genres, watched_titles, top_n=10):
                 sim_vec = cosine_sim[idx]
             scores += watch_weight * sim_vec
 
+    # Exclude watched movies
     watched_idx = []
     for t in watched_titles:
         if t in indices:
@@ -80,7 +89,7 @@ def recommend_for_user(preferred_genres, watched_titles, top_n=10):
     recommended_idx = np.argsort(scores)[::-1][:top_n]
     return df.iloc[recommended_idx][['Series_Title', 'Genre', 'IMDB_Rating']]
 
-# ========= SESSION STATE INIT =========
+# ========= SESSION STATE =========
 if "auth" not in st.session_state:
     st.session_state.auth = False
 if "username" not in st.session_state:
@@ -97,7 +106,7 @@ def login_signup_page():
 
     if option == "Signup":
         username = st.text_input("Choose Username")
-        password = st.text_input("Choose Password", type="password")  # placeholder (no auth check here)
+        password = st.text_input("Choose Password", type="password")  # not used yet, placeholder
         genres = st.multiselect(
             "Select Favourite Genres",
             sorted(set(g for glist in df['Genre'].str.split(', ') for g in glist))
@@ -118,7 +127,7 @@ def login_signup_page():
 
     else:  # Login
         username = st.text_input("Username")
-        password = st.text_input("Password", type="password")  # placeholder
+        password = st.text_input("Password", type="password")  # not used yet, placeholder
         if st.button("Login"):
             user_data = load_user(username)
             if user_data:
@@ -147,6 +156,7 @@ def dashboard():
 
     # --- Top Rated ---
     with tab1:
+        st.subheader("Top IMDb Rated Movies")
         top_movies = df.sort_values(by="IMDB_Rating", ascending=False).head(20)
         for i, row in top_movies.iterrows():
             col1, col2, col3 = st.columns([5, 3, 2])
@@ -171,13 +181,13 @@ def dashboard():
     # --- Recommendations ---
     with tab3:
         if not st.session_state.genres and not st.session_state.watched:
-            st.warning("Add some genres or watched movies for recommendations.")
+            st.warning("Add some genres or watched movies first.")
         else:
             recs = recommend_for_user(st.session_state.genres, st.session_state.watched, top_n=10)
             st.subheader("Recommended for You:")
             st.table(recs)
 
-# ========= APP ROUTER =========
+# ========= APP ROUTE =========
 if not st.session_state.auth:
     login_signup_page()
 else:
