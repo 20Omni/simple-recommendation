@@ -131,7 +131,7 @@ def movie_card(row, watched_list, username, section, reason=None, show_button=Tr
             if st.button("Watched", key=key):
                 watched_list.append(row['Series_Title'])
                 update_watched(username, watched_list)
-                st.experimental_rerun()
+                st.rerun()
         else:
             st.button("Watched", key=key, disabled=True)
 
@@ -198,7 +198,7 @@ def login_signup_page():
                 st.session_state.genres = []
                 st.session_state.temp_selected_genres = []
                 st.session_state.page = "genre_select"
-                st.experimental_rerun()
+                st.rerun()
             else:
                 st.error("Username exists")
     else:
