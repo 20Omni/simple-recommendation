@@ -13,21 +13,26 @@ def load_user_data():
         with open(USER_DATA_FILE, "r") as f:
             return json.load(f)
     return {}
+
 def save_user_data(data):
     with open(USER_DATA_FILE, "w") as f:
         json.dump(data, f)
+
 def signup_user(username):
     data = load_user_data()
     if username in data: return False
     data[username] = {"genres": [], "watched": []}
     save_user_data(data)
     return True
+
 def load_user(username): return load_user_data().get(username)
+
 def update_user_genres(username, genres):
     data = load_user_data()
     if username in data:
         data[username]['genres'] = genres
         save_user_data(data)
+
 def update_watched(username, watched_list):
     data = load_user_data()
     if username in data:
@@ -37,10 +42,11 @@ def update_watched(username, watched_list):
 # ===== Load Model/Data =====
 @st.cache_resource
 def load_model():
-    df = joblib.load("movies_df.pkl")        # Must have Series_Title, Genre, IMDB_Rating
+    df = joblib.load("movies_df.pkl") 
     cosine_sim = joblib.load("cosine_similarity.pkl")
     indices = joblib.load("title_indices.pkl")
     return df, cosine_sim, indices
+
 df, cosine_sim, indices = load_model()
 
 # ===== Recommendation Logic =====
@@ -49,18 +55,22 @@ def recommend_for_user(preferred_genres, watched_titles, top_n=10):
     if len(watched_titles) >= 3: genre_weight, watch_weight = 0.3, 4.0
     elif watched_titles: genre_weight, watch_weight = 0.5, 3.5
     else: genre_weight, watch_weight = 2.0, 0.0
+
     for genre in preferred_genres:
         scores[df['Genre'].str.contains(genre, case=False, na=False)] += genre_weight
+
     for title in watched_titles:
         if title in indices:
             idx = indices[title]
             sim_vec = cosine_sim[idx].mean(axis=0) if isinstance(idx,(pd.Series,list,np.ndarray)) else cosine_sim[idx]
             scores += watch_weight * sim_vec
+
     watched_idx = []
     for t in watched_titles:
         if t in indices:
             idx_val = indices[t]
             watched_idx.extend(idx_val if isinstance(idx_val,(pd.Series,list,np.ndarray)) else [idx_val])
+
     scores[watched_idx] = -1
     rec_df = df.iloc[np.argsort(scores)[::-1]]
     rec_df = rec_df[~rec_df['Series_Title'].isin(watched_titles)]
@@ -94,24 +104,19 @@ def movie_card(row, watched_list, username, section, reason=None, show_button=Tr
     genre_color = "#b2b2b2" if dark else "#5A5A5A"
     rating_color = "#fcb900"
     emoji, genre_text = get_dominant_genre_with_emoji(row["Genre"], signup_genres)
-    st.markdown(f"""
-    <style>.movie-card{{border:1.5px solid {border_color};border-radius:16px;padding:16px;
-    margin-bottom:22px;background:{bg_color};color:{text_color};
-    box-shadow:0 2px 7px rgba(0,0,0,0.10);transition:transform 0.2s ease,box-shadow 0.2s ease;}}
-    .movie-card:hover{{transform:translateY(-6px);box-shadow:0 8px 22px rgba(0,0,0,0.17);}}
-    .movie-title{{font-size:1.15rem;font-weight:700;margin-bottom:4px;}}
-    .movie-genres{{font-size:0.9rem;color:{genre_color};margin-bottom:6px;}}
-    .movie-rating{{font-size:1.2rem;color:{rating_color};margin-bottom:6px;}}
-    .reason-text{{font-size:0.9rem;color:#399ed7;margin-bottom:8px;}}</style>
-    """, unsafe_allow_html=True)
-    html = f'<div class="movie-card"><div class="movie-title">{row["Series_Title"]}</div>'
-    html += f'<div class="movie-genres"><span>{emoji}</span> <span style="font-style: italic;">{genre_text}</span></div>'
-    html += f'<div class="movie-rating">⭐ {row["IMDB_Rating"]:.1f}/10</div>'
-    if reason: html += f'<div class="reason-text">💡 {reason}</div>'
-    html += '</div>'
+    html = f'''
+    <div style="border:1.5px solid {border_color};border-radius:10px;padding:12px;
+    margin-bottom:16px;background:{bg_color};color:{text_color};
+    box-shadow:0 2px 6px rgba(0,0,0,0.08);">
+        <div style="font-weight:700;">{row["Series_Title"]}</div>
+        <div style="color:{genre_color};">{emoji} <span style="font-style: italic;">{genre_text}</span></div>
+        <div style="color:{rating_color};">⭐ {row["IMDB_Rating"]:.1f}/10</div>
+        {f'<div style="color:#399ed7;">💡 {reason}</div>' if reason else ""}
+    </div>
+    '''
     st.markdown(html, unsafe_allow_html=True)
     if show_button:
-        key = f"watched_btn_{section}_{row.name}"
+        key = f"watched_{section}_{row.name}"
         if row['Series_Title'] not in watched_list:
             if st.button("Watched", key=key):
                 watched_list.append(row['Series_Title']); update_watched(username, watched_list); st.rerun()
@@ -121,17 +126,18 @@ def movie_card(row, watched_list, username, section, reason=None, show_button=Tr
 def render_cards(dataframe, watched_list, username, section, show_button=True, reason_map=None, signup_genres=None):
     cols_per_row = 3
     for r in range(ceil(len(dataframe) / cols_per_row)):
-        cols = st.columns(cols_per_row, gap="large")
+        cols = st.columns(cols_per_row)
         for c in range(cols_per_row):
-            idx = r * cols_per_row + c
+            idx = r*cols_per_row + c
             if idx < len(dataframe):
                 row = dataframe.iloc[idx]
                 reason = reason_map.get(row['Series_Title']) if reason_map else None
-                with cols[c]: movie_card(row, watched_list, username, section, reason, show_button, signup_genres)
+                with cols[c]:
+                    movie_card(row, watched_list, username, section, reason, show_button, signup_genres)
 
 # ===== Search with Live Suggestions =====
 def search_and_render(df_tab, search_key, watched_list, username, section, show_button=True, reason_map=None, signup_genres=None):
-    query = st.text_input("🔍 Search by movie title or genre", key=search_key, placeholder="Type to search...").strip().lower()
+    query = st.text_input("🔍 Search", key=search_key, placeholder="Type to search...").strip().lower()
     filtered_df = df_tab
     if query:
         filtered_df = df_tab[df_tab["Series_Title"].str.lower().str.contains(query) |
@@ -155,20 +161,17 @@ def search_and_render(df_tab, search_key, watched_list, username, section, show_
 # ===== Pages =====
 def login_signup_page():
     st.title("Movie Recommender – Login / Signup")
-    option = st.radio("Select option", ["Login", "Signup"], horizontal=True)
+    opt = st.radio("Select option", ["Login", "Signup"], horizontal=True)
     username = st.text_input("Username"); password = st.text_input("Password", type="password")
-    if option == "Signup":
-        if st.button("Signup"):
-            if username and password:
-                if signup_user(username):
-                    st.session_state.username = username
-                    st.session_state.watched, st.session_state.genres, st.session_state.temp_selected_genres = [], [], []
-                    st.session_state.page = "genre_select"
-                    st.rerun()
-                else: st.error("Username already exists")
-            else: st.error("Fill both fields")
+    if opt == "Signup":
+        if st.button("Signup") and username and password:
+            if signup_user(username):
+                st.session_state.username = username
+                st.session_state.watched, st.session_state.genres, st.session_state.temp_selected_genres = [], [], []
+                st.session_state.page = "genre_select"; st.rerun()
+            else: st.error("Username exists")
     else:
-        if st.button("Login"):
+        if st.button("Login") and username and password:
             user = load_user(username)
             if user:
                 st.session_state.username = username
@@ -179,23 +182,32 @@ def login_signup_page():
                 st.rerun()
             else: st.error("User not found")
 
+# ===== Genre Selection with small square boxes =====
 def genre_selection_page():
     st.title(f"Welcome, {st.session_state.username}!")
     st.subheader("Select Your Favourite Genres")
+
     all_genres = sorted(set(g for glist in df['Genre'].str.split(', ') for g in glist))
     if "temp_selected_genres" not in st.session_state:
         st.session_state.temp_selected_genres = []
 
-    # CSS styles
     st.markdown("""
     <style>
-    .genre-grid{display:flex;flex-wrap:wrap;gap:18px;margin-bottom:20px;}
-    .genre-card{display:flex;flex-direction:column;align-items:center;justify-content:center;
-        width:110px;height:110px;border-radius:16px;background:#f5f6fa;color:#292640;
-        border:2.2px solid #dadbe7;font-size:1.01rem;cursor:pointer;transition:0.12s;
-        box-shadow:0 2px 9px rgba(80,85,110,0.08);}
-    .genre-card.selected{background:#1e4fff;color:#fff;border:2.6px solid #274ccf;
-        box-shadow:0 2px 20px #5368ee25;}
+    .genre-grid {display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px;}
+    .genre-box {
+        width: 80px; height: 80px;
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        border-radius: 8px;
+        background: #f5f6fa; border: 2px solid #dadbe7;
+        cursor: pointer; transition: all 0.12s ease;
+        font-size: 0.8rem; text-align: center;
+    }
+    .genre-box.selected {
+        background: #1e4fff; color: white; border-color: #274ccf;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+    }
+    .genre-emoji {font-size: 1.4rem;}
     </style>
     """, unsafe_allow_html=True)
 
@@ -203,14 +215,17 @@ def genre_selection_page():
     for genre in all_genres:
         emoji = genre_emojis.get(genre.lower(),"🎞️")
         selected = genre in st.session_state.temp_selected_genres
-        sel_class = "genre-card selected" if selected else "genre-card"
+        sel_class = "genre-box selected" if selected else "genre-box"
+
         if st.button(f"{emoji} {genre}", key=f"btn_{genre}"):
             if selected:
                 st.session_state.temp_selected_genres.remove(genre)
             else:
                 st.session_state.temp_selected_genres.append(genre)
             st.rerun()
-        st.markdown(f'<div class="{sel_class}">{emoji}<br>{genre}</div>', unsafe_allow_html=True)
+
+        st.markdown(f'<div class="{sel_class}"><div class="genre-emoji">{emoji}</div>{genre}</div>', unsafe_allow_html=True)
+
     st.markdown("</div>", unsafe_allow_html=True)
 
     if st.button("Next ➡️"):
@@ -218,13 +233,12 @@ def genre_selection_page():
             update_user_genres(st.session_state.username, st.session_state.temp_selected_genres)
             st.session_state.genres = st.session_state.temp_selected_genres.copy()
             st.session_state.scroll_to_top = True
-            st.session_state.page = "dashboard"
-            st.rerun()
+            st.session_state.page = "dashboard"; st.rerun()
         else:
             st.error("Please select at least one genre to continue.")
 
+# ===== Dashboard Page =====
 def dashboard_page():
-    # Scroll-to-top after genre selection
     if st.session_state.get("scroll_to_top", False):
         st.markdown("<script>window.scrollTo({top: 0, behavior: 'instant'});</script>", unsafe_allow_html=True)
         st.session_state.scroll_to_top = False
@@ -246,7 +260,7 @@ def dashboard_page():
         watched_df = df[df['Series_Title'].isin(st.session_state.watched)]
         search_and_render(watched_df, "search_watched", st.session_state.watched, st.session_state.username, "your", False, signup_genres=st.session_state.genres)
     with tab3:
-        recs = recommend_for_user(st.session_state.genres, st.session_state.watched, top_n=10)
+        recs = recommend_for_user(st.session_state.genres, st.session_state.watched, 10)
         reason_map = {}
         for idx, row in recs.iterrows():
             reasons = []
