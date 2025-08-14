@@ -39,7 +39,7 @@ def update_watched(username, watched_list):
 # ========= LOAD MODEL =========
 @st.cache_resource
 def load_model():
-    df = joblib.load("movies_df.pkl")
+    df = joblib.load("movies_df.pkl")  # Must contain Poster_Link col
     cosine_sim = joblib.load("cosine_similarity.pkl")
     indices = joblib.load("title_indices.pkl")
     return df, cosine_sim, indices
@@ -75,14 +75,17 @@ def recommend_for_user(preferred_genres, watched_titles, top_n=10):
                 watched_idx.append(idx_val)
     scores[watched_idx] = -1
 
-    rec_idx = np.argsort(scores)[::-1][:top_n]
-    return df.iloc[rec_idx][['Series_Title', 'Genre', 'IMDB_Rating', 'Poster_Link']] \
-             if 'Poster_Link' in df.columns else df.iloc[rec_idx]
+    rec_idx = np.argsort(scores)[::-1]
+    rec_df = df.iloc[rec_idx]
+    # Exclude watched
+    rec_df = rec_df[~rec_df['Series_Title'].isin(watched_titles)]
+    return rec_df.head(top_n)[['Series_Title', 'Genre', 'IMDB_Rating', 'Poster_Link']] \
+           if 'Poster_Link' in df.columns else rec_df.head(top_n)
 
-# ========= MOVIE CARD COMPONENT =========
-def movie_card(row, watched_list, username, reason=None):
+# ========= MOVIE CARD =========
+def movie_card(row, watched_list, username, section, reason=None):
     col_img, col_info = st.columns([1, 3])
-    # Poster image (placeholder if missing)
+
     if 'Poster_Link' in row and pd.notna(row['Poster_Link']):
         col_img.image(row['Poster_Link'], width=100)
     else:
@@ -93,11 +96,11 @@ def movie_card(row, watched_list, username, reason=None):
     if reason:
         col_info.caption(f"💡 {reason}")
 
-    # Watched button
+    key = f"watched_btn_{section}_{row.name}"
     if row['Series_Title'] in watched_list:
-        col_info.button("Watched", key=f"watched_btn_{row.name}", disabled=True)
+        col_info.button("Watched", key=key, disabled=True)
     else:
-        if col_info.button("Mark as Watched", key=f"watched_btn_{row.name}"):
+        if col_info.button("Mark as Watched", key=key):
             watched_list.append(row['Series_Title'])
             update_watched(username, watched_list)
             st.success(f"Added '{row['Series_Title']}' ✅")
@@ -113,7 +116,7 @@ if "genres" not in st.session_state:
 if "watched" not in st.session_state:
     st.session_state.watched = []
 
-# ========= LOGIN/SIGNUP PAGE =========
+# ========= LOGIN/SIGNUP =========
 def login_signup_page():
     st.title("🎬 Movie Recommender Dashboard")
     option = st.radio("Select Option", ["Login", "Signup"], horizontal=True)
@@ -137,7 +140,7 @@ def login_signup_page():
             else:
                 st.error("Fill all fields and pick at least one genre.")
 
-    else:  # Login
+    else:
         username = st.text_input("Username")
         password = st.text_input("Password", type="password")
         if st.button("Login"):
@@ -168,9 +171,10 @@ def dashboard():
     # --- Top Rated ---
     with tab1:
         st.subheader("Top IMDb Rated Movies")
-        top_movies = df.sort_values(by="IMDB_Rating", ascending=False).head(20)
+        top_movies = df.sort_values(by="IMDB_Rating", ascending=False).head(50)
+        top_movies = top_movies[~top_movies['Series_Title'].isin(st.session_state.watched)]
         for _, row in top_movies.iterrows():
-            movie_card(row, st.session_state.watched, st.session_state.username)
+            movie_card(row, st.session_state.watched, st.session_state.username, section="top")
 
     # --- Your Watching ---
     with tab2:
@@ -178,7 +182,7 @@ def dashboard():
         if st.session_state.watched:
             watched_df = df[df['Series_Title'].isin(st.session_state.watched)]
             for _, row in watched_df.iterrows():
-                movie_card(row, st.session_state.watched, st.session_state.username)
+                movie_card(row, st.session_state.watched, st.session_state.username, section="your")
         else:
             st.info("No watched movies yet.")
 
@@ -193,9 +197,6 @@ def dashboard():
                                       top_n=10)
 
             for idx, row in recs.iterrows():
-                # Build reason
-                reasons = []
-                # Max 3 watched movie reasons
                 watched_reasons = []
                 for watched in st.session_state.watched:
                     if watched in indices:
@@ -204,16 +205,19 @@ def dashboard():
                             w_idx = w_idx.iloc[0] if hasattr(w_idx, "iloc") else w_idx[0]
                         if cosine_sim[w_idx][idx] > 0.1:
                             watched_reasons.append(watched)
+                watched_reasons = watched_reasons[:3]
+
+                genre_matches = [g for g in st.session_state.genres if g.lower() in row["Genre"].lower()][:3]
+
+                reasons_list = []
                 if watched_reasons:
-                    reasons.append("You watched " + ", ".join(watched_reasons[:3]))
-
-                # Max 3 genre reasons (from signup genres)
-                genre_matches = [g for g in st.session_state.genres if g.lower() in row["Genre"].lower()]
+                    reasons_list.append("You watched " + ", ".join(watched_reasons))
                 if genre_matches:
-                    reasons.append("You selected genre(s) " + ", ".join(genre_matches[:3]) + " at signup")
+                    reasons_list.append("You selected genre(s) " + ", ".join(genre_matches) + " at signup")
 
-                reason_text = " and ".join(reasons) if reasons else None
-                movie_card(row, st.session_state.watched, st.session_state.username, reason=reason_text)
+                reason_text = " and ".join(reasons_list) if reasons_list else None
+
+                movie_card(row, st.session_state.watched, st.session_state.username, section="rec", reason=reason_text)
 
 # ========= APP ROUTER =========
 if not st.session_state.auth:
