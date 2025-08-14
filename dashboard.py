@@ -78,7 +78,7 @@ def login_signup_page():
                 st.session_state.genres = genres
                 st.session_state.watched = []
                 st.success(f"Welcome {username}! You have signed up successfully 🎉")
-                st.experimental_rerun()
+                st.rerun()
             else:
                 st.error("Please fill all fields and select at least one genre.")
 
