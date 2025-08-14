@@ -14,7 +14,10 @@ for k, v in {
     "username": "",
     "dark_mode": False,
     "_scroll_once": False,
-    "_user_data": {}  # store all user data here
+    "_user_data": {},  # store all user data here
+    "scroll_to_top": False,
+    "last_search_query": "",
+    "current_suggestions": []
 }.items():
     if k not in st.session_state:
         st.session_state[k] = v
@@ -151,38 +154,61 @@ def render_cards(dfdata, watched_list, username, section, show_button=True, reas
                 with cols[c]:
                     movie_card(row, watched_list, username, section, reason, show_button, signup_genres)
 
-# ===== Search and Render (Fixed) =====
+# ===== Enhanced Search with Live Suggestions =====
+def update_suggestions(search_key, query, df_tab):
+    query = query.strip().lower()
+    if not query:
+        st.session_state.current_suggestions = []
+        return
+    
+    filtered = df_tab[
+        df_tab["Series_Title"].str.lower().str.contains(query, na=False) |
+        df_tab["Genre"].str.lower().str.contains(query, na=False)
+    ]
+    st.session_state.current_suggestions = filtered["Series_Title"].head(5).tolist()
+
 def search_and_render(df_tab, search_key, watched_list, username, section,
                       show_button=True, reason_map=None, signup_genres=None):
     input_key = f"{search_key}_q"
+    
+    # Get or initialize search query
     if input_key not in st.session_state:
         st.session_state[input_key] = ""
+    
+    # Search bar with live suggestions
+    query = st.text_input(
+        "🔍 Search", 
+        key=input_key, 
+        placeholder="Type to search...",
+        value=st.session_state[input_key],
+        on_change=update_suggestions,
+        args=(search_key, st.session_state[input_key], df_tab)
+    ).strip().lower()
 
-    query = st.text_input("🔍 Search", key=input_key, placeholder="Type to search...").strip().lower()
-
+    # Update current query in session state
+    st.session_state[input_key] = query
+    
+    # Get filtered results
     filtered_df = df_tab[
         df_tab["Series_Title"].str.lower().str.contains(query, na=False) |
         df_tab["Genre"].str.lower().str.contains(query, na=False)
     ] if query else df_tab.copy()
 
-    # Show suggestions
-    if query:
-        suggestions = filtered_df["Series_Title"].head(5).tolist()
-        if suggestions:
-            st.markdown("**Suggestions:**")
-            cols = st.columns(len(suggestions))
-            for i, title in enumerate(suggestions):
-                if cols[i].button(title, key=f"sugg_{search_key}_{i}"):
-                    st.session_state[input_key] = title
-        elif filtered_df.empty:
-            st.warning("No results found")
-            return
+    # Show live suggestions
+    if st.session_state.current_suggestions:
+        st.markdown("**Suggestions:**")
+        cols = st.columns(5)
+        for i, title in enumerate(st.session_state.current_suggestions):
+            if cols[i].button(title, key=f"sugg_{search_key}_{i}"):
+                st.session_state[input_key] = title
+                st.experimental_rerun()
 
-    # Render cards
-    if filtered_df.empty:
+    # Render results
+    if filtered_df.empty and query:
         st.warning("No results found")
-    else:
-        render_cards(filtered_df, watched_list, username, section, show_button, reason_map, signup_genres)
+        return
+    
+    render_cards(filtered_df, watched_list, username, section, show_button, reason_map, signup_genres)
 
 # ===== Pages =====
 def login_signup_page():
@@ -233,15 +259,17 @@ def genre_selection_page():
             st.session_state.genres = st.session_state.temp_selected_genres.copy()
             st.session_state.page = "dashboard"
             st.session_state._scroll_once = True
+            st.session_state.scroll_to_top = True  # Added to trigger scroll to top
             st.rerun()
         else:
             st.error("Please select at least 1 genre")
 
 def dashboard_page():
-    if st.session_state._scroll_once:
-        # Scroll to top reliably
+    # Scroll handling
+    if st.session_state._scroll_once or st.session_state.get("scroll_to_top", False):
         components.html("<script>window.scrollTo(0,0)</script>", height=0)
         st.session_state._scroll_once = False
+        st.session_state.scroll_to_top = False  # Reset after scrolling
 
     st.sidebar.checkbox("🌙 Dark Mode", key="dark_mode")
     st.write(f"### Welcome, {st.session_state.username}")
