@@ -2,8 +2,43 @@ import streamlit as st
 import pandas as pd
 import joblib
 import numpy as np
+import json
+import os
 
-# ===== Load pre-trained model artifacts =====
+# ========= CONFIG =========
+USER_DATA_FILE = "user_data.json"
+
+# ========= USER DATA STORAGE HELPERS =========
+def load_user_data():
+    if os.path.exists(USER_DATA_FILE):
+        with open(USER_DATA_FILE, "r") as f:
+            return json.load(f)
+    else:
+        return {}
+
+def save_user_data(data):
+    with open(USER_DATA_FILE, "w") as f:
+        json.dump(data, f)
+
+def signup_user(username, genres):
+    data = load_user_data()
+    if username in data:
+        return False  # already exists
+    data[username] = {"genres": genres, "watched": []}
+    save_user_data(data)
+    return True
+
+def load_user(username):
+    data = load_user_data()
+    return data.get(username)
+
+def update_watched(username, watched_list):
+    data = load_user_data()
+    if username in data:
+        data[username]['watched'] = watched_list
+        save_user_data(data)
+
+# ========= LOAD MODEL =========
 @st.cache_resource
 def load_model():
     df = joblib.load("movies_df.pkl")
@@ -13,20 +48,16 @@ def load_model():
 
 df, cosine_sim, indices = load_model()
 
-# ===== Recommendation function =====
+# ========= RECOMMENDER =========
 def recommend_for_user(preferred_genres, watched_titles, top_n=10):
     scores = np.zeros(len(df))
-
-    # Give more influence to watched movies
     genre_weight = 1.0
     watch_weight = 2.0
 
-    # Boost for signup genres
     for genre in preferred_genres:
         mask = df['Genre'].str.contains(genre, case=False, na=False)
         scores[mask] += genre_weight
 
-    # Boost for watched movies similarity
     for title in watched_titles:
         if title in indices:
             idx = indices[title]
@@ -36,7 +67,6 @@ def recommend_for_user(preferred_genres, watched_titles, top_n=10):
                 sim_vec = cosine_sim[idx]
             scores += watch_weight * sim_vec
 
-    # Exclude watched
     watched_idx = []
     for t in watched_titles:
         if t in indices:
@@ -47,11 +77,10 @@ def recommend_for_user(preferred_genres, watched_titles, top_n=10):
                 watched_idx.append(idx_val)
     scores[watched_idx] = -1
 
-    # No filtering by genre — allow adaptive shift
     recommended_idx = np.argsort(scores)[::-1][:top_n]
     return df.iloc[recommended_idx][['Series_Title', 'Genre', 'IMDB_Rating']]
 
-# ===== Session state init =====
+# ========= SESSION STATE INIT =========
 if "auth" not in st.session_state:
     st.session_state.auth = False
 if "username" not in st.session_state:
@@ -61,54 +90,52 @@ if "genres" not in st.session_state:
 if "watched" not in st.session_state:
     st.session_state.watched = []
 
-# ===== Login / Signup =====
+# ========= LOGIN/SIGNUP PAGE =========
 def login_signup_page():
     st.title("🎬 Movie Recommender Dashboard")
-    st.subheader("Login or Signup to continue")
-
     option = st.radio("Select Option", ["Login", "Signup"], horizontal=True)
 
     if option == "Signup":
-        username = st.text_input("Choose a Username")
-        password = st.text_input("Choose a Password", type="password")
+        username = st.text_input("Choose Username")
+        password = st.text_input("Choose Password", type="password")  # placeholder (no auth check here)
         genres = st.multiselect(
-            "Select Your Favourite Genres",
+            "Select Favourite Genres",
             sorted(set(g for glist in df['Genre'].str.split(', ') for g in glist))
         )
-
         if st.button("Signup"):
             if username and password and genres:
-                st.session_state.auth = True
-                st.session_state.username = username
-                st.session_state.genres = genres
-                st.session_state.watched = []
-                st.success(f"Welcome {username}! 🎉")
-                st.rerun()   # rerun after signup
+                if signup_user(username, genres):
+                    st.session_state.auth = True
+                    st.session_state.username = username
+                    st.session_state.genres = genres
+                    st.session_state.watched = []
+                    st.success(f"Account created for {username}! 🎉")
+                    st.rerun()
+                else:
+                    st.error("Username already exists!")
             else:
-                st.error("Please fill all fields and select at least one genre.")
+                st.error("Fill all fields and pick at least one genre.")
 
     else:  # Login
-        username = st.text_input("Enter Username")
-        password = st.text_input("Enter Password", type="password")
+        username = st.text_input("Username")
+        password = st.text_input("Password", type="password")  # placeholder
         if st.button("Login"):
-            if username:
+            user_data = load_user(username)
+            if user_data:
                 st.session_state.auth = True
                 st.session_state.username = username
-                if not st.session_state.genres:
-                    st.session_state.genres = []
-                if not st.session_state.watched:
-                    st.session_state.watched = []
+                st.session_state.genres = user_data.get("genres", [])
+                st.session_state.watched = user_data.get("watched", [])
                 st.success(f"Welcome back {username}! 👋")
                 st.rerun()
             else:
-                st.error("Please enter username.")
+                st.error("User not found. Please sign up.")
 
-# ===== Dashboard =====
+# ========= DASHBOARD =========
 def dashboard():
     st.markdown(f"### 👋 Welcome, **{st.session_state.username}**")
     st.markdown("---")
 
-    # Logout
     if st.button("🚪 Logout"):
         st.session_state.auth = False
         st.session_state.username = ""
@@ -118,9 +145,9 @@ def dashboard():
 
     tab1, tab2, tab3 = st.tabs(["⭐ Top Rated", "🎥 Your Watching", "🎯 Recommendations"])
 
+    # --- Top Rated ---
     with tab1:
-        st.subheader("Top IMDb Rated Movies")
-        top_movies = df.sort_values(by="IMDB_Rating", ascending=False).head(20)  # Show top 20 only
+        top_movies = df.sort_values(by="IMDB_Rating", ascending=False).head(20)
         for i, row in top_movies.iterrows():
             col1, col2, col3 = st.columns([5, 3, 2])
             col1.write(f"**{row['Series_Title']}** ({row['IMDB_Rating']})")
@@ -128,26 +155,29 @@ def dashboard():
             if col3.button("Watched", key=f"watched_{i}"):
                 if row['Series_Title'] not in st.session_state.watched:
                     st.session_state.watched.append(row['Series_Title'])
+                    update_watched(st.session_state.username, st.session_state.watched)
                     st.success(f"Added '{row['Series_Title']}' ✅")
                     st.rerun()
 
+    # --- Your Watching ---
     with tab2:
-        st.subheader("Your Watching List")
         if st.session_state.watched:
+            st.write("🎬 Your Watched Movies:")
             for title in st.session_state.watched:
-                st.write(f"🎬 {title}")
+                st.write(f"- {title}")
         else:
-            st.info("You haven't added any movies yet.")
+            st.info("No watched movies yet.")
 
+    # --- Recommendations ---
     with tab3:
-        st.subheader("Recommended for You")
         if not st.session_state.genres and not st.session_state.watched:
-            st.warning("No genres or watched movies found. Please add some to see recommendations.")
+            st.warning("Add some genres or watched movies for recommendations.")
         else:
             recs = recommend_for_user(st.session_state.genres, st.session_state.watched, top_n=10)
+            st.subheader("Recommended for You:")
             st.table(recs)
 
-# ===== App control =====
+# ========= APP ROUTER =========
 if not st.session_state.auth:
     login_signup_page()
 else:
