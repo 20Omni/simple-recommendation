@@ -99,60 +99,95 @@ def recommend_for_user(preferred_genres, watched_titles, top_n=10):
     return mixed_df[['Series_Title', 'Genre', 'IMDB_Rating']]
 
 # ========= MOVIE CARD =========
-def movie_card(row, watched_list, username, section, reason=None, show_button=True, dark_mode=False):
-    bg_color = "#1e1e1e" if dark_mode else "#fefefe"
-    text_color = "#f5f5f5" if dark_mode else "#000"
-    genre_color = "#bbb" if dark_mode else "#555"
+def movie_card(
+    row,
+    watched_list,
+    username,
+    section,
+    reason=None,
+    show_button=True,
+    dark_mode=False
+):
+    # Styling variables
+    bg_color = "#23272e" if dark_mode else "#fdfdfe"
+    text_color = "#f5f5f5" if dark_mode else "#222"
+    border_color = "#3d434d" if dark_mode else "#e2e3e6"
+    genre_color = "#b2b2b2" if dark_mode else "#5A5A5A"
+    spacing = "18px"
 
     card_css = f"""
     <style>
     .movie-card {{
-        border: 1px solid #444 if {dark_mode} else #ddd;
-        border-radius: 10px;
-        padding: 16px;
-        background-color: {bg_color};
+        border: 1.5px solid {border_color};
+        border-radius: 15px;
+        margin-bottom: {spacing};
+        margin-right: {spacing};
+        padding: 18px 18px 14px 18px;
+        background: {bg_color};
         color: {text_color};
-        box-shadow: 0 2px 5px rgba(0,0,0,0.07);
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
-    }}
-    .movie-card:hover {{
-        transform: translateY(-4px);
-        box-shadow: 0 8px 18px rgba(0,0,0,0.25);
+        box-shadow: 0 3px 12px rgba(28,28,43,0.04);
+        min-height: 145px;
+        min-width: 220px;
+        max-width: 350px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
     }}
     .movie-title {{
         font-size: 1.2rem;
-        font-weight: 600;
-        margin-bottom: 4px;
+        font-weight: 700;
+        margin-bottom: 2px;
     }}
     .movie-genres {{
-        font-size: 0.9rem;
-        color: {genre_color};
-        margin-bottom: 8px;
+        font-size: 0.95rem;
         font-style: italic;
+        color: {genre_color};
+        margin-bottom: 10px;
     }}
     .movie-rating {{
-        font-size: 1.3rem;
-        color: #f39c12;
-        margin-bottom: 8px;
+        font-size: 1.6rem;
+        color: #fcb900;
+        letter-spacing: 5px;
+        margin-bottom: 5px;
     }}
     .reason-text {{
-        font-size: 0.85rem;
-        color: #4aa3df;
-        margin-bottom: 10px;
+        font-size: 0.89rem;
+        color: #5097b5;
+        margin-bottom: 8px;
+    }}
+    .watched-btn {{
+        background-color: #4973f2;
+        color: #fff;
+        border: none;
+        padding: 4px 18px;
+        border-radius: 15px;
+        font-size: 0.97rem;
+        font-weight: bold;
+        margin-top: 5px;
+        letter-spacing: 1px;
+        cursor: pointer;
+        transition: background 0.25s;
+        box-shadow: 0 2px 6px #ddd2;
+        height: 32px;
+    }}
+    .watched-btn:hover {{
+        background: #2f53db;
+    }}
+    .watched-btn[disabled], .watched-btn:disabled {{
+        background: #aab6bb;
+        color: #e5e5e5;
+        cursor: not-allowed;
     }}
     </style>
     """
     st.markdown(card_css, unsafe_allow_html=True)
-
     with st.container():
-        st.markdown(f'<div class="movie-card">', unsafe_allow_html=True)
+        st.markdown('<div class="movie-card">', unsafe_allow_html=True)
         st.markdown(f'<div class="movie-title">{row["Series_Title"]}</div>', unsafe_allow_html=True)
         st.markdown(f'<div class="movie-genres">{row["Genre"]}</div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="movie-rating">⭐</div>', unsafe_allow_html=True)
-
+        st.markdown(f'<div class="movie-rating">⭐ <span style="font-size:1.04rem;color:#999;">{row["IMDB_Rating"]:.1f}/10</span></div>', unsafe_allow_html=True)
         if reason:
-            st.markdown(f'<div class="reason-text">💡 {reason}</div>', unsafe_allow_html=True)
-
+            st.markdown(f'<div class="reason-text">{reason}</div>', unsafe_allow_html=True)
         key = f"watched_btn_{section}_{row.name}"
         if show_button:
             if row['Series_Title'] not in watched_list:
@@ -162,8 +197,23 @@ def movie_card(row, watched_list, username, section, reason=None, show_button=Tr
                     st.success(f"Added '{row['Series_Title']}' ✅")
                     st.rerun()
             else:
-                st.button("Watched", key=key, disabled=True)
+                st.markdown(f'<button class="watched-btn" disabled>Watched</button>', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
+
+def render_cards(dataframe, watched_list, username, section, show_button=True, reason_map=None, dark_mode=False):
+    cols_per_row = 3
+    rows_needed = ceil(len(dataframe) / cols_per_row)
+    dark = st.session_state.dark_mode
+    for r in range(rows_needed):
+        cols = st.columns(cols_per_row, gap="large")
+        for c in range(cols_per_row):
+            idx = r * cols_per_row + c
+            if idx < len(dataframe):
+                row = dataframe.iloc[idx]
+                reason = reason_map.get(row['Series_Title']) if reason_map else None
+                with cols[c]:
+                    movie_card(row, watched_list, username, section, reason, show_button, dark)
+
 
 # ========= SESSION STATE INIT =========
 if "auth" not in st.session_state:
