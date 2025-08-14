@@ -127,26 +127,35 @@ def render_cards(dfdata, watched_list, username, section, show_button=True, reas
                 with cols[c]:
                     movie_card(row, watched_list, username, section, reason, show_button, signup_genres)
 
-# ===== Improved Search =====
+# ===== Improved Live Search with Instant Suggestions =====
 def search_and_render(df_tab, search_key, watched_list, username, section,
                       show_button=True, reason_map=None, signup_genres=None):
-    search_query = st.text_input("🔍 Search by movie title or genre",
-                                 key=search_key,
+    search_query = st.session_state.get(search_key, "").strip().lower()
+    search_input = st.text_input("🔍 Search by movie title or genre",
+                                 value=search_query,
+                                 key=f"{search_key}_input",
                                  placeholder="Type to search...").strip().lower()
+
+    # Update session state live
+    if search_input != search_query:
+        st.session_state[search_key] = search_input
+
     filtered_df = df_tab
-    if search_query:
+    if search_input:
         filtered_df = df_tab[
-            df_tab["Series_Title"].str.lower().str.contains(search_query) |
-            df_tab["Genre"].str.lower().str.contains(search_query)
+            df_tab["Series_Title"].str.lower().str.contains(search_input) |
+            df_tab["Genre"].str.lower().str.contains(search_input)
         ].copy()
 
+        # Live suggestions
         suggestions = filtered_df["Series_Title"].head(5).tolist()
         if suggestions:
             st.caption("Suggestions:")
-            cols = st.columns(len(suggestions))
+            sugg_cols = st.columns(len(suggestions))
             for i, title in enumerate(suggestions):
-                if cols[i].button(title, key=f"sugg_{search_key}_{i}"):
-                    st.session_state[search_key] = title
+                if sugg_cols[i].button(title, key=f"sugg_{search_key}_{i}"):
+                    st.session_state[search_key] = title.lower()
+                    st.session_state[f"{search_key}_input"] = title.lower()
                     st.rerun()
         else:
             st.warning("No results found")
@@ -215,9 +224,8 @@ def genre_selection_page():
             st.error("Please select at least 1 genre")
 
 def dashboard_page():
-    # Scroll-to-top only once after genre selection
     if st.session_state.get("scroll_to_top", False):
-        st.markdown("<script>window.scrollTo({top: 0, behavior: 'instant'});</script>", unsafe_allow_html=True)
+        st.markdown("<script>window.scrollTo({top: 0, behavior: 'smooth'});</script>", unsafe_allow_html=True)
         st.session_state.scroll_to_top = False
 
     st.sidebar.checkbox("🌙 Dark Mode", key="dark_mode")
