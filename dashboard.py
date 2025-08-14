@@ -108,7 +108,7 @@ def dashboard():
         st.session_state.username = ""
         st.session_state.genres = []
         st.session_state.watched = []
-        st.experimental_rerun()
+        st.rerun()
 
     # Tabs
     tab1, tab2, tab3 = st.tabs(["⭐ Top Rated", "🎥 Your Watching", "🎯 Recommendations"])
