@@ -115,8 +115,6 @@ def movie_card(row, watched_list, username, section, reason=None, show_button=Tr
     border_color = "#3d434d" if dark_mode else "#e2e3e6"
     genre_color = "#b2b2b2" if dark_mode else "#5A5A5A"
     rating_color = "#fcb900"
-    shadow = "0 2px 7px rgba(0,0,0,0.10)"
-    shadow_hover = "0 8px 22px rgba(0,0,0,0.17)"
     emoji, genre_text = get_dominant_genre_with_emoji(row["Genre"], signup_genres)
 
     st.markdown(f"""
@@ -125,11 +123,11 @@ def movie_card(row, watched_list, username, section, reason=None, show_button=Tr
         border: 1.5px solid {border_color}; border-radius: 16px;
         padding: 16px; margin-bottom: 22px;
         background: {bg_color}; color: {text_color};
-        box-shadow: {shadow};
+        box-shadow: 0 2px 7px rgba(0,0,0,0.10);
         transition: transform 0.2s ease, box-shadow 0.2s ease;
     }}
     .movie-card:hover {{
-        transform: translateY(-6px); box-shadow: {shadow_hover};
+        transform: translateY(-6px); box-shadow: 0 8px 22px rgba(0,0,0,0.17);
     }}
     .movie-title {{ font-size: 1.15rem; font-weight: 700; margin-bottom: 4px; }}
     .movie-genres {{ font-size: 0.9rem; color: {genre_color}; margin-bottom: 6px; }}
@@ -157,6 +155,35 @@ def movie_card(row, watched_list, username, section, reason=None, show_button=Tr
         else:
             st.button("Watched", key=key, disabled=True)
 
+# ===== Render with Search Suggestions =====
+def search_and_render(df_tab, search_key, watched_list, username, section, show_button=True, reason_map=None, signup_genres=None):
+    search_query = st.text_input("🔍 Search by movie title or genre", key=search_key).strip().lower()
+    if search_query:
+        suggestions = df_tab[
+            df_tab["Series_Title"].str.lower().str.contains(search_query) |
+            df_tab["Genre"].str.lower().str.contains(search_query)
+        ]["Series_Title"].head(5).tolist()
+
+        if suggestions:
+            st.caption("Suggestions:")
+            cols = st.columns(len(suggestions))
+            for i, s in enumerate(suggestions):
+                if cols[i].button(s, key=f"sugg_{search_key}_{i}"):
+                    search_query = s.lower()
+        else:
+            st.warning("No results found")
+            return
+
+        df_tab = df_tab[
+            df_tab["Series_Title"].str.lower().str.contains(search_query) |
+            df_tab["Genre"].str.lower().str.contains(search_query)
+        ]
+    if df_tab.empty:
+        st.warning("No results found")
+    else:
+        render_cards(df_tab, watched_list, username, section, show_button, reason_map, signup_genres)
+
+# ===== Grid =====
 def render_cards(dataframe, watched_list, username, section, show_button=True, reason_map=None, signup_genres=None):
     cols_per_row = 3
     total_rows = ceil(len(dataframe) / cols_per_row)
@@ -181,6 +208,9 @@ def login_signup_page():
             if username and password:
                 if signup_user(username):
                     st.session_state.username = username
+                    st.session_state.watched = []
+                    st.session_state.genres = []
+                    st.session_state.temp_selected_genres = []
                     st.session_state.page = "genre_select"
                     st.rerun()
                 else:
@@ -194,6 +224,11 @@ def login_signup_page():
                 st.session_state.username = username
                 st.session_state.watched = user.get("watched", [])
                 st.session_state.genres = user.get("genres", [])
+                if not st.session_state.watched:
+                    st.session_state.watched = []
+                if not st.session_state.genres:
+                    st.session_state.genres = []
+                st.session_state.temp_selected_genres = []
                 st.session_state.page = "dashboard" if st.session_state.genres else "genre_select"
                 st.rerun()
             else:
@@ -203,19 +238,17 @@ def genre_selection_page():
     st.title(f"Welcome, {st.session_state.username}!")
     st.subheader("Select your favourite genres")
     all_genres = sorted(set(g for glist in df['Genre'].str.split(', ') for g in glist))
-    if "temp_selected_genres" not in st.session_state:
-        st.session_state.temp_selected_genres = st.session_state.genres or []
-    def toggle(genre):
-        if genre in st.session_state.temp_selected_genres:
-            st.session_state.temp_selected_genres.remove(genre)
-        else:
-            st.session_state.temp_selected_genres.append(genre)
+    if "temp_selected_genres" not in st.session_state or not st.session_state.genres:
+        st.session_state.temp_selected_genres = []
     cols = st.columns(4)
     for i, genre in enumerate(all_genres):
         col = cols[i % 4]
         label = f"✅ {genre}" if genre in st.session_state.temp_selected_genres else genre
         if col.button(label, key=f"btn_{genre}"):
-            toggle(genre)
+            if genre in st.session_state.temp_selected_genres:
+                st.session_state.temp_selected_genres.remove(genre)
+            else:
+                st.session_state.temp_selected_genres.append(genre)
     if st.button("Next"):
         if st.session_state.temp_selected_genres:
             update_user_genres(st.session_state.username, st.session_state.temp_selected_genres)
@@ -231,44 +264,30 @@ def dashboard_page():
     tab1, tab2, tab3 = st.tabs(["⭐ Top Rated", "🎥 Your Watching", "🎯 Recommendations"])
 
     with tab1:
-        search = st.text_input("🔍 Search in Top Rated", key="search_top").lower()
         top_movies = df.sort_values(by="IMDB_Rating", ascending=False)
-        genre_set = set()
-        for genres in df['Genre'].str.split(', '):
-            genre_set.update(genres)
+        genre_set = set(g for lst in df['Genre'].str.split(', ') for g in lst)
         mixed_movies = [top_movies[top_movies['Genre'].str.contains(g, case=False)].head(3) for g in genre_set]
         mixed_df = pd.concat(mixed_movies).drop_duplicates(subset="Series_Title")
-        mixed_df = mixed_df[~mixed_df['Series_Title'].isin(st.session_state.watched)]
-        if search:
-            mixed_df = mixed_df[mixed_df["Series_Title"].str.lower().str.contains(search) |
-                                mixed_df["Genre"].str.lower().str.contains(search)]
-        render_cards(mixed_df.head(50), st.session_state.watched, st.session_state.username, "top", show_button=True, signup_genres=st.session_state.genres)
+        mixed_df = mixed_df[~mixed_df['Series_Title'].isin(st.session_state.watched)].head(50)
+        search_and_render(mixed_df, "search_top", st.session_state.watched, st.session_state.username, "top", True, signup_genres=st.session_state.genres)
 
     with tab2:
-        search = st.text_input("🔍 Search in Your Watched", key="search_watched").lower()
         watched_df = df[df['Series_Title'].isin(st.session_state.watched)]
-        if search:
-            watched_df = watched_df[watched_df["Series_Title"].str.lower().str.contains(search) |
-                                    watched_df["Genre"].str.lower().str.contains(search)]
-        render_cards(watched_df, st.session_state.watched, st.session_state.username, "your", show_button=False, signup_genres=st.session_state.genres)
+        search_and_render(watched_df, "search_watched", st.session_state.watched, st.session_state.username, "your", False, signup_genres=st.session_state.genres)
 
     with tab3:
-        search = st.text_input("🔍 Search in Recommendations", key="search_rec").lower()
         recs = recommend_for_user(st.session_state.genres, st.session_state.watched, top_n=10)
-        if search:
-            recs = recs[recs["Series_Title"].str.lower().str.contains(search) |
-                        recs["Genre"].str.lower().str.contains(search)]
         reason_map = {}
         for idx, row in recs.iterrows():
             reasons = []
             watched_reasons = [w for w in st.session_state.watched if w in indices and cosine_sim[indices[w]][idx] > 0.1]
             if watched_reasons:
                 reasons.append("You watched " + ", ".join(watched_reasons[:3]))
-            genre_matches = [g for g in st.session_state.genres if g.lower() in row["Genre"].lower()]
+            genre_matches = [g for g in st.session_state.genres if g.lower() in row["Genre"].lower()][:3]
             if genre_matches:
-                reasons.append("You selected genre(s) " + ", ".join(genre_matches[:3]))
+                reasons.append("You selected genre(s) " + ", ".join(genre_matches))
             reason_map[row['Series_Title']] = " and ".join(reasons) if reasons else None
-        render_cards(recs, st.session_state.watched, st.session_state.username, "rec", show_button=True, reason_map=reason_map, signup_genres=st.session_state.genres)
+        search_and_render(recs, "search_rec", st.session_state.watched, st.session_state.username, "rec", True, reason_map, signup_genres=st.session_state.genres)
 
 # ===== Routing =====
 if "page" not in st.session_state:
