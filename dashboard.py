@@ -4,7 +4,6 @@ import joblib
 import numpy as np
 import json
 import os
-import random
 
 # ========= CONFIG =========
 USER_DATA_FILE = "user_data.json"
@@ -40,7 +39,7 @@ def update_watched(username, watched_list):
 # ========= LOAD MODEL =========
 @st.cache_resource
 def load_model():
-    df = joblib.load("movies_df.pkl")  # Must have 'Poster_Link' column
+    df = joblib.load("movies_df.pkl")  # Assume Poster_Link exists but we will ignore posters
     cosine_sim = joblib.load("cosine_similarity.pkl")
     indices = joblib.load("title_indices.pkl")
     return df, cosine_sim, indices
@@ -51,10 +50,9 @@ df, cosine_sim, indices = load_model()
 def recommend_for_user(preferred_genres, watched_titles, top_n=10):
     scores = np.zeros(len(df))
 
-    # Adaptive weights
     if len(watched_titles) >= 3:
-        genre_weight = 0.3   # minimal genre influence after enough watches
-        watch_weight = 4.0   # strong watch influence
+        genre_weight = 0.3
+        watch_weight = 4.0
     elif len(watched_titles) > 0:
         genre_weight = 0.5
         watch_weight = 3.5
@@ -62,12 +60,10 @@ def recommend_for_user(preferred_genres, watched_titles, top_n=10):
         genre_weight = 2.0
         watch_weight = 0.0
 
-    # Add genre boost
     for genre in preferred_genres:
         mask = df['Genre'].str.contains(genre, case=False, na=False)
         scores[mask] += genre_weight
 
-    # Add watched movie similarity boost
     for title in watched_titles:
         if title in indices:
             idx = indices[title]
@@ -77,7 +73,6 @@ def recommend_for_user(preferred_genres, watched_titles, top_n=10):
                 sim_vec = cosine_sim[idx]
             scores += watch_weight * sim_vec
 
-    # Remove already watched movies from consideration
     watched_idx = []
     for t in watched_titles:
         if t in indices:
@@ -88,44 +83,63 @@ def recommend_for_user(preferred_genres, watched_titles, top_n=10):
                 watched_idx.append(idx_val)
     scores[watched_idx] = -1
 
-    # Sort recommendations by score
     rec_idx = np.argsort(scores)[::-1]
     rec_df = df.iloc[rec_idx]
-
-    # Exclude watched from recommendations
     rec_df = rec_df[~rec_df['Series_Title'].isin(watched_titles)]
 
-    # Maintain 2-3 results from signup genres if possible
     signup_df = rec_df[rec_df['Genre'].str.contains('|'.join(preferred_genres), case=False)]
     mixed_df = pd.concat([signup_df.head(3), rec_df]).drop_duplicates().head(top_n)
 
-    return mixed_df[['Series_Title', 'Genre', 'IMDB_Rating', 'Poster_Link']] \
-        if 'Poster_Link' in df.columns else mixed_df.head(top_n)
+    return mixed_df[['Series_Title', 'Genre', 'IMDB_Rating']]
 
-# ========= MOVIE CARD =========
-def movie_card(row, watched_list, username, section, reason=None):
-    col_img, col_info = st.columns([1, 3])
+# ========= STAR RATING UX =========
+def star_rating(rating):
+    filled_stars = int(round(rating / 2))  # IMDb 1-10 scale to 5 stars approx
+    stars = "⭐" * filled_stars + "✩" * (5 - filled_stars)
+    return stars
 
-    poster = row.get('Poster_Link', None)
-    if poster and pd.notna(poster):
-        col_img.image(poster, width=100)
-    else:
-        col_img.image("https://via.placeholder.com/100x150.png?text=No+Image", width=100)
+# ========= NICE MOVIE CARD NO POSTER =========
+def movie_card_no_poster(row, watched_list, username, section, reason=None, show_button=True):
+    # Boxed card style using st.markdown + container + css
+    movie_title = row['Series_Title']
+    genre = row['Genre']
+    rating = row['IMDB_Rating']
+    stars = star_rating(rating)
 
-    col_info.markdown(f"**{row['Series_Title']}** ({row['IMDB_Rating']})")
-    col_info.write(f"Genres: {row['Genre']}")
-    if reason:
-        col_info.caption(f"💡 {reason}")
+    card_style = """
+    <style>
+    .movie-card {
+        border: 1px solid #ccc;
+        border-radius: 10px;
+        padding: 15px;
+        margin-bottom: 15px;
+        background: #f9f9f9;
+        box-shadow: 2px 2px 6px rgb(200 200 200 / 0.5);
+    }
+    </style>
+    """
 
-    key = f"watched_btn_{section}_{row.name}"
-    if row['Series_Title'] in watched_list:
-        col_info.button("Watched", key=key, disabled=True)
-    else:
-        if col_info.button("Mark as Watched", key=key):
-            watched_list.append(row['Series_Title'])
-            update_watched(username, watched_list)
-            st.success(f"Added '{row['Series_Title']}' ✅")
-            st.rerun()
+    st.markdown(card_style, unsafe_allow_html=True)
+    with st.container():
+        st.markdown(f'<div class="movie-card">', unsafe_allow_html=True)
+        col1, col2 = st.columns([6, 1])
+        with col1:
+            st.markdown(f"### {movie_title}")
+            st.markdown(f"**Genres:** {genre}")
+            st.markdown(f"**Rating:** {stars} ({rating:.1f}/10)")
+            if reason:
+                st.caption(f"💡 {reason}")
+        with col2:
+            key = f"watched_btn_{section}_{row.name}"
+            if movie_title in watched_list:
+                st.button("Watched", key=key, disabled=True)
+            elif show_button:
+                if st.button("Mark as Watched", key=key):
+                    watched_list.append(movie_title)
+                    update_watched(username, watched_list)
+                    st.success(f"Added '{movie_title}' ✅")
+                    st.rerun()
+        st.markdown("</div>", unsafe_allow_html=True)
 
 # ========= SESSION STATE =========
 if "auth" not in st.session_state:
@@ -137,7 +151,7 @@ if "genres" not in st.session_state:
 if "watched" not in st.session_state:
     st.session_state.watched = []
 
-# ========= LOGIN/SIGNUP =========
+# ========= LOGIN/SIGNUP PAGE =========
 def login_signup_page():
     st.title("🎬 Movie Recommender Dashboard")
     option = st.radio("Select Option", ["Login", "Signup"], horizontal=True)
@@ -146,7 +160,7 @@ def login_signup_page():
         username = st.text_input("Choose Username")
         password = st.text_input("Choose Password", type="password")
         genres = st.multiselect("Select Favourite Genres",
-                                 sorted(set(g for glist in df['Genre'].str.split(', ') for g in glist)))
+                               sorted(set(g for glist in df['Genre'].str.split(', ') for g in glist)))
         if st.button("Signup"):
             if username and password and genres:
                 if signup_user(username, genres):
@@ -160,7 +174,6 @@ def login_signup_page():
                     st.error("Username already exists!")
             else:
                 st.error("Fill all fields and pick at least one genre.")
-
     else:
         username = st.text_input("Username")
         password = st.text_input("Password", type="password")
@@ -189,41 +202,58 @@ def dashboard():
 
     tab1, tab2, tab3 = st.tabs(["⭐ Top Rated", "🎥 Your Watching", "🎯 Recommendations"])
 
-    # --- Top Rated with mixed genres ---
+    # Top Rated tab
     with tab1:
         st.subheader("Top IMDb Rated Movies (Mixed Genres)")
         top_movies = df.sort_values(by="IMDB_Rating", ascending=False)
-        # Ensure variety of genres
-        genre_groups = []
-        for genre in df['Genre'].str.split(', '):
-            genre_groups.extend(genre)
-        genre_groups = set(genre_groups)
 
-        mixed_list = []
-        for genre in genre_groups:
-            subset = top_movies[top_movies['Genre'].str.contains(genre, case=False, na=False)]
-            mixed_list.append(subset.head(3))  # top 3 per genre
-        
-        top_mixed_df = pd.concat(mixed_list).drop_duplicates(subset='Series_Title')
-        # Exclude watched
-        top_mixed_df = top_mixed_df[~top_mixed_df['Series_Title'].isin(st.session_state.watched)]
-        # Show top 50 random from this mixed set sorted by rating
-        top_mixed_df = top_mixed_df.sort_values(by="IMDB_Rating", ascending=False).head(50)
+        # Include variety: sample 3 movies from each genre found
+        genre_set = set()
+        for g_list in df['Genre'].str.split(', '):
+            genre_set.update(g_list)
+        mixed_movies = []
+        for g in genre_set:
+            genre_subset = top_movies[top_movies['Genre'].str.contains(g, case=False, na=False)]
+            mixed_movies.append(genre_subset.head(3))
+        mixed_df = pd.concat(mixed_movies).drop_duplicates(subset="Series_Title")
+        mixed_df = mixed_df[~mixed_df['Series_Title'].isin(st.session_state.watched)]
+        mixed_df = mixed_df.sort_values(by="IMDB_Rating", ascending=False).head(50)
 
-        for _, row in top_mixed_df.iterrows():
-            movie_card(row, st.session_state.watched, st.session_state.username, section="top")
+        for _, row in mixed_df.iterrows():
+            movie_card_no_poster(row, st.session_state.watched, st.session_state.username, "top")
 
-    # --- Your Watching ---
+    # Your Watching tab
     with tab2:
         st.subheader("Your Watched Movies")
         if st.session_state.watched:
             watched_df = df[df['Series_Title'].isin(st.session_state.watched)]
             for _, row in watched_df.iterrows():
-                movie_card(row, st.session_state.watched, st.session_state.username, section="your")
+                # Minimal card, no button, no poster
+                movie_title = row['Series_Title']
+                genre = row['Genre']
+                rating = row['IMDB_Rating']
+                stars = star_rating(rating)
+                card_style = """
+                <style>
+                .movie-card-minimal {
+                    border: 1px solid #ddd;
+                    border-radius: 8px;
+                    padding: 10px;
+                    margin-bottom: 10px;
+                    background: #fafafa;
+                }
+                </style>
+                """
+                st.markdown(card_style, unsafe_allow_html=True)
+                st.markdown(f'<div class="movie-card-minimal">', unsafe_allow_html=True)
+                st.markdown(f"### {movie_title}")
+                st.markdown(f"Genres: {genre}")
+                st.markdown(f"Rating: {stars} ({rating:.1f}/10)")
+                st.markdown("</div>", unsafe_allow_html=True)
         else:
             st.info("No watched movies yet.")
 
-    # --- Recommendations ---
+    # Recommendations tab
     with tab3:
         st.subheader("Recommended for You")
         if not st.session_state.genres and not st.session_state.watched:
@@ -251,9 +281,10 @@ def dashboard():
                     reasons_list.append("You watched " + ", ".join(watched_reasons))
                 if genre_matches:
                     reasons_list.append("You selected genre(s) " + ", ".join(genre_matches) + " at signup")
-                
+
                 reason_text = " and ".join(reasons_list) if reasons_list else None
-                movie_card(row, st.session_state.watched, st.session_state.username, section="rec", reason=reason_text)
+
+                movie_card_no_poster(row, st.session_state.watched, st.session_state.username, "rec", reason=reason_text)
 
 # ========= APP ROUTER =========
 if not st.session_state.auth:
