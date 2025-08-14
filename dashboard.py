@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import joblib
+import numpy as np
 
 # ===== Load pre-trained model artifacts =====
 @st.cache_resource
@@ -14,7 +15,6 @@ df, cosine_sim, indices = load_model()
 
 # ===== Recommendation function =====
 def recommend_for_user(preferred_genres, watched_titles, top_n=10):
-    import numpy as np
     scores = np.zeros(len(df))
 
     # Boost for preferred genres
@@ -22,7 +22,7 @@ def recommend_for_user(preferred_genres, watched_titles, top_n=10):
         mask = df['Genre'].str.contains(genre, case=False, na=False)
         scores[mask] += 1.0
 
-    # Boost for similarity to watched movies
+    # Boost for similarity to watched movies (handle duplicates)
     for title in watched_titles:
         if title in indices:
             idx = indices[title]
@@ -46,7 +46,7 @@ def recommend_for_user(preferred_genres, watched_titles, top_n=10):
     recommended_idx = np.argsort(scores)[::-1][:top_n]
     return df.iloc[recommended_idx][['Series_Title', 'Genre', 'IMDB_Rating']]
 
-# ===== Session state setup =====
+# ===== Session state =====
 if "auth" not in st.session_state:
     st.session_state.auth = False
 if "username" not in st.session_state:
@@ -56,17 +56,20 @@ if "genres" not in st.session_state:
 if "watched" not in st.session_state:
     st.session_state.watched = []
 
-# ===== Login / Signup =====
+# ===== Login/Signup page =====
 def login_signup_page():
     st.title("🎬 Movie Recommender Dashboard")
     st.subheader("Login or Signup to continue")
 
-    option = st.radio("Select Option", ["Login", "Signup"])
+    option = st.radio("Select Option", ["Login", "Signup"], horizontal=True)
 
     if option == "Signup":
         username = st.text_input("Choose a Username")
         password = st.text_input("Choose a Password", type="password")
-        genres = st.multiselect("Select Your Favourite Genres", sorted(set(g for glist in df['Genre'].str.split(', ') for g in glist)))
+        genres = st.multiselect(
+            "Select Your Favourite Genres",
+            sorted(set(g for glist in df['Genre'].str.split(', ') for g in glist))
+        )
 
         if st.button("Signup"):
             if username and password and genres:
@@ -75,6 +78,7 @@ def login_signup_page():
                 st.session_state.genres = genres
                 st.session_state.watched = []
                 st.success(f"Welcome {username}! You have signed up successfully 🎉")
+                st.experimental_rerun()
             else:
                 st.error("Please fill all fields and select at least one genre.")
 
@@ -82,7 +86,6 @@ def login_signup_page():
         username = st.text_input("Enter Username")
         password = st.text_input("Enter Password", type="password")
         if st.button("Login"):
-            # For demo, no password check (implement persistent DB for real app)
             if username:
                 st.session_state.auth = True
                 st.session_state.username = username
@@ -90,10 +93,11 @@ def login_signup_page():
                     st.session_state.genres = []
                 if not st.session_state.watched:
                     st.session_state.watched = []
+                st.experimental_rerun()
             else:
                 st.error("Please enter username.")
 
-# ===== Main Dashboard =====
+# ===== Dashboard =====
 def dashboard():
     st.markdown(f"### 👋 Welcome, **{st.session_state.username}**")
     st.markdown("---")
@@ -106,16 +110,18 @@ def dashboard():
         st.session_state.watched = []
         st.experimental_rerun()
 
+    # Tabs
     tab1, tab2, tab3 = st.tabs(["⭐ Top Rated", "🎥 Your Watching", "🎯 Recommendations"])
 
     with tab1:
         st.subheader("Top IMDb Rated Movies")
         top_movies = df.sort_values(by="IMDB_Rating", ascending=False)
-        for _, row in top_movies.iterrows():
+        for i, row in top_movies.iterrows():
             col1, col2, col3 = st.columns([5, 3, 2])
             col1.write(f"**{row['Series_Title']}** ({row['IMDB_Rating']})")
             col2.write(row['Genre'])
-            if col3.button("Watched", key=f"watched_{row['Series_Title']}"):
+            # FIX: unique key using row index
+            if col3.button("Watched", key=f"watched_{i}"):
                 if row['Series_Title'] not in st.session_state.watched:
                     st.session_state.watched.append(row['Series_Title'])
                     st.success(f"Added '{row['Series_Title']}' to your watching list ✅")
