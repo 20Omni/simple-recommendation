@@ -210,7 +210,7 @@ def login_signup_page():
                 st.session_state.genres = user.get("genres", [])
                 st.session_state.page = "dashboard" if st.session_state.genres else "genre_select"
                 st.session_state._scroll_once = True
-                st.experimental_rerun()
+                st.rerun()
             else:
                 st.error("User not found")
 
@@ -233,7 +233,7 @@ def genre_selection_page():
             st.session_state.genres = st.session_state.temp_selected_genres.copy()
             st.session_state.page = "dashboard"
             st.session_state._scroll_once = True
-            st.experimental_rerun()
+            st.rerun()
         else:
             st.error("Please select at least 1 genre")
 
@@ -252,7 +252,7 @@ def dashboard_page():
         st.session_state.genres = []
         st.session_state.watched = []
         st.session_state.temp_selected_genres = []
-        st.experimental_rerun()
+        st.rerun()
 
     tab1, tab2, tab3 = st.tabs(["⭐ Top Rated", "🎥 Your Watching", "🎯 Recommendations"])
 
