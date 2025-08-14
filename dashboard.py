@@ -203,7 +203,7 @@ def genre_selection_page():
         if st.button(f"{emoji} {genre}", key=f"btn_{genre}"):
             if selected: st.session_state.temp_selected_genres.remove(genre)
             else: st.session_state.temp_selected_genres.append(genre)
-            st.experimental_rerun()
+            st.rerun()
     st.markdown("</div>", unsafe_allow_html=True)
 
     if st.button("Next ➡️"):
