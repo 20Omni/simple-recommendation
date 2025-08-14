@@ -155,7 +155,7 @@ def render_cards(dfdata, watched_list, username, section, show_button=True, reas
                     movie_card(row, watched_list, username, section, reason, show_button, signup_genres)
 
 # ===== Enhanced Search with Live Suggestions =====
-def update_suggestions(search_key, query, df_tab):
+def update_suggestions(query, df_tab):
     query = query.strip().lower()
     if not query:
         st.session_state.current_suggestions = []
@@ -182,7 +182,7 @@ def search_and_render(df_tab, search_key, watched_list, username, section,
         placeholder="Type to search...",
         value=st.session_state[input_key],
         on_change=update_suggestions,
-        args=(search_key, st.session_state[input_key], df_tab)
+        args=(st.session_state[input_key], df_tab)
     ).strip().lower()
 
     # Update current query in session state
@@ -197,7 +197,7 @@ def search_and_render(df_tab, search_key, watched_list, username, section,
     # Show live suggestions
     if st.session_state.current_suggestions:
         st.markdown("**Suggestions:**")
-        cols = st.columns(5)
+        cols = st.columns(len(st.session_state.current_suggestions))
         for i, title in enumerate(st.session_state.current_suggestions):
             if cols[i].button(title, key=f"sugg_{search_key}_{i}"):
                 st.session_state[input_key] = title
@@ -238,7 +238,7 @@ def login_signup_page():
                 st.session_state._scroll_once = True
                 st.rerun()
             else:
-                st.error("User not found")
+                st.error("User  not found")
 
 def genre_selection_page():
     st.title(f"Welcome, {st.session_state.username}!")
