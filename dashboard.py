@@ -4,6 +4,7 @@ import joblib
 import numpy as np
 import json, os
 from math import ceil
+from streamlit_extras.st_searchbox import st_searchbox
 
 USER_DATA_FILE = "user_data.json"
 
@@ -32,7 +33,7 @@ def update_watched(username, watched_list):
 # ===== Load Model/Data =====
 @st.cache_resource
 def load_model():
-    df = joblib.load("movies_df.pkl")        # Must have Series_Title, Genre, IMDB_Rating
+    df = joblib.load("movies_df.pkl")        
     cosine_sim = joblib.load("cosine_similarity.pkl")
     indices = joblib.load("title_indices.pkl")
     return df, cosine_sim, indices
@@ -123,46 +124,45 @@ def render_cards(dataframe, watched_list, username, section, show_button=True, r
                 reason = reason_map.get(row['Series_Title']) if reason_map else None
                 with cols[c]: movie_card(row, watched_list, username, section, reason, show_button, signup_genres)
 
-# ===== True Dropdown Search Renderer =====
+# ===== True Autocomplete Search =====
 def search_and_render(df_tab, search_key, watched_list, username, section, show_button=True, reason_map=None, signup_genres=None):
-    all_titles = df_tab["Series_Title"].sort_values().tolist()
-    all_gens = sorted(set(g for lst in df_tab["Genre"].str.split(', ') for g in lst))
-    options = [""] + all_titles + all_gens
-    selected = st.selectbox("🔎 Search or pick", options=options, index=0, key=search_key,
-                            placeholder="Start typing movie or genre...")
-    if selected:
-        by_title = df_tab[df_tab["Series_Title"] == selected]
-        by_genre = df_tab[df_tab["Genre"].str.contains(selected, case=False, na=False)]
-        display_df = pd.concat([by_title, by_genre]).drop_duplicates()
-        if display_df.empty: st.warning("No results found!")
-        else: render_cards(display_df, watched_list, username, section, show_button, reason_map, signup_genres)
+    def search_func(q):
+        if not q: return []
+        q = q.lower()
+        all_ops = df_tab["Series_Title"].tolist() + [g for lst in df_tab["Genre"].str.split(", ") for g in lst]
+        return [v for v in all_ops if q in v.lower()]
+    suggestion = st_searchbox(search_func, key=search_key, placeholder="Search by movie title or genre...")
+    if suggestion:
+        results = df_tab[
+            df_tab["Series_Title"].str.lower().str.contains(suggestion.lower()) |
+            df_tab["Genre"].str.lower().str.contains(suggestion.lower())
+        ]
+        if results.empty: st.warning("No results found")
+        else: render_cards(results, watched_list, username, section, show_button, reason_map, signup_genres)
     else:
         render_cards(df_tab, watched_list, username, section, show_button, reason_map, signup_genres)
 
 # ===== Pages =====
 def login_signup_page():
     st.title("Movie Recommender – Login / Signup")
-    option = st.radio("Select option", ["Login", "Signup"], horizontal=True)
+    opt = st.radio("Select option", ["Login", "Signup"], horizontal=True)
     username = st.text_input("Username"); password = st.text_input("Password", type="password")
-    if option == "Signup":
-        if st.button("Signup"):
-            if username and password:
-                if signup_user(username):
-                    st.session_state.username = username
-                    st.session_state.watched, st.session_state.genres, st.session_state.temp_selected_genres = [], [], []
-                    st.session_state.page = "genre_select"; st.rerun()
-                else: st.error("Username already exists")
-            else: st.error("Fill both fields")
+    if opt=="Signup":
+        if st.button("Signup") and username and password:
+            if signup_user(username):
+                st.session_state.username = username
+                st.session_state.watched, st.session_state.genres, st.session_state.temp_selected_genres = [], [], []
+                st.session_state.page = "genre_select"; st.rerun()
+            else: st.error("Username exists")
     else:
-        if st.button("Login"):
+        if st.button("Login") and username and password:
             user = load_user(username)
             if user:
                 st.session_state.username = username
                 st.session_state.watched = user.get("watched", [])
                 st.session_state.genres = user.get("genres", [])
                 if not st.session_state.genres: st.session_state.temp_selected_genres = []
-                st.session_state.page = "dashboard" if st.session_state.genres else "genre_select"
-                st.rerun()
+                st.session_state.page = "dashboard" if st.session_state.genres else "genre_select"; st.rerun()
             else: st.error("User not found")
 
 def genre_selection_page():
@@ -199,9 +199,11 @@ def genre_selection_page():
             update_user_genres(st.session_state.username, st.session_state.temp_selected_genres)
             st.session_state.genres = st.session_state.temp_selected_genres.copy()
             st.session_state.page = "dashboard"; st.rerun()
-        else: st.error("Please select at least one genre to continue.")
+        else: st.error("Please select at least 1 genre")
 
 def dashboard_page():
+    # Scroll-to-top JS injection to avoid page loading mid-tabs
+    st.markdown("<script>window.scrollTo(0, 0);</script>", unsafe_allow_html=True)
     st.sidebar.checkbox("🌙 Dark Mode", key="dark_mode")
     st.write(f"### Welcome, {st.session_state.username}")
     if st.button("🚪 Logout"):
