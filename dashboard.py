@@ -9,6 +9,7 @@ from math import ceil
 from streamlit_extras.st_searchbox import st_searchbox
 
 
+
 USER_DATA_FILE = "user_data.json"
 
 # ===== User Data Storage =====
