@@ -90,11 +90,25 @@ def recommend_for_user(preferred_genres, watched_titles, top_n=10):
 
 # ===== Emoji Mapping =====
 genre_emojis = {
-    "action": "🎬", "comedy": "😂", "drama": "🎭", "romance": "❤️",
-    "thriller": "🔪", "horror": "👻", "sci-fi": "👽", "science fiction": "👽",
-    "adventure": "🧭", "fantasy": "🦄", "animation": "🐭", "documentary": "🎥",
-    "crime": "🕵️", "mystery": "🕵️", "war": "⚔️", "musical": "🎶", "music": "🎶"
+    "action": "🎬",
+    "comedy": "😂",
+    "drama": "🎭",
+    "romance": "❤️",
+    "thriller": "🔪",
+    "horror": "👻",
+    "sci-fi": "👽",
+    "science fiction": "👽",
+    "adventure": "🧭",
+    "fantasy": "🦄",
+    "animation": "🐭",
+    "documentary": "🎥",
+    "crime": "🕵️",
+    "mystery": "🕵️",
+    "war": "⚔️",
+    "musical": "🎶",
+    "music": "🎶"
 }
+
 def get_dominant_genre_with_emoji(genre_string, signup_genres=None):
     genres_list = [g.strip() for g in genre_string.split(",")]
     if signup_genres:
@@ -120,19 +134,39 @@ def movie_card(row, watched_list, username, section, reason=None, show_button=Tr
     st.markdown(f"""
     <style>
     .movie-card {{
-        border: 1.5px solid {border_color}; border-radius: 16px;
-        padding: 16px; margin-bottom: 22px;
-        background: {bg_color}; color: {text_color};
+        border: 1.5px solid {border_color};
+        border-radius: 16px;
+        padding: 16px;
+        margin-bottom: 22px;
+        background: {bg_color};
+        color: {text_color};
         box-shadow: 0 2px 7px rgba(0,0,0,0.10);
         transition: transform 0.2s ease, box-shadow 0.2s ease;
     }}
     .movie-card:hover {{
-        transform: translateY(-6px); box-shadow: 0 8px 22px rgba(0,0,0,0.17);
+        transform: translateY(-6px);
+        box-shadow: 0 8px 22px rgba(0,0,0,0.17);
     }}
-    .movie-title {{ font-size: 1.15rem; font-weight: 700; margin-bottom: 4px; }}
-    .movie-genres {{ font-size: 0.9rem; color: {genre_color}; margin-bottom: 6px; }}
-    .movie-rating {{ font-size: 1.2rem; color: {rating_color}; margin-bottom: 6px; }}
-    .reason-text {{ font-size: 0.9rem; color: #399ed7; margin-bottom: 8px; }}
+    .movie-title {{
+        font-size: 1.15rem;
+        font-weight: 700;
+        margin-bottom: 4px;
+    }}
+    .movie-genres {{
+        font-size: 0.9rem;
+        color: {genre_color};
+        margin-bottom: 6px;
+    }}
+    .movie-rating {{
+        font-size: 1.2rem;
+        color: {rating_color};
+        margin-bottom: 6px;
+    }}
+    .reason-text {{
+        font-size: 0.9rem;
+        color: #399ed7;
+        margin-bottom: 8px;
+    }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -158,6 +192,7 @@ def movie_card(row, watched_list, username, section, reason=None, show_button=Tr
 # ===== Render with Search Suggestions =====
 def search_and_render(df_tab, search_key, watched_list, username, section, show_button=True, reason_map=None, signup_genres=None):
     search_query = st.text_input("🔍 Search by movie title or genre", key=search_key).strip().lower()
+    display_df = df_tab
     if search_query:
         suggestions = df_tab[
             df_tab["Series_Title"].str.lower().str.contains(search_query) |
@@ -170,18 +205,21 @@ def search_and_render(df_tab, search_key, watched_list, username, section, show_
             for i, s in enumerate(suggestions):
                 if cols[i].button(s, key=f"sugg_{search_key}_{i}"):
                     search_query = s.lower()
+                    # Re-filter display_df based on click
+                    display_df = df_tab[
+                        df_tab["Series_Title"].str.lower().str.contains(search_query) |
+                        df_tab["Genre"].str.lower().str.contains(search_query)
+                    ]
         else:
             st.warning("No results found")
             return
+    else:
+        display_df = df_tab
 
-        df_tab = df_tab[
-            df_tab["Series_Title"].str.lower().str.contains(search_query) |
-            df_tab["Genre"].str.lower().str.contains(search_query)
-        ]
-    if df_tab.empty:
+    if display_df.empty:
         st.warning("No results found")
     else:
-        render_cards(df_tab, watched_list, username, section, show_button, reason_map, signup_genres)
+        render_cards(display_df, watched_list, username, section, show_button, reason_map, signup_genres)
 
 # ===== Grid =====
 def render_cards(dataframe, watched_list, username, section, show_button=True, reason_map=None, signup_genres=None):
@@ -208,6 +246,7 @@ def login_signup_page():
             if username and password:
                 if signup_user(username):
                     st.session_state.username = username
+                    # Clear data for new user
                     st.session_state.watched = []
                     st.session_state.genres = []
                     st.session_state.temp_selected_genres = []
@@ -261,6 +300,15 @@ def genre_selection_page():
 def dashboard_page():
     st.sidebar.checkbox("🌙 Dark Mode", key="dark_mode")
     st.write(f"### Welcome, {st.session_state.username}")
+
+    if st.button("🚪 Logout"):
+        st.session_state.page = "login_signup"
+        st.session_state.username = ""
+        st.session_state.genres = []
+        st.session_state.watched = []
+        st.session_state.temp_selected_genres = []
+        st.rerun()
+
     tab1, tab2, tab3 = st.tabs(["⭐ Top Rated", "🎥 Your Watching", "🎯 Recommendations"])
 
     with tab1:
@@ -296,6 +344,8 @@ if "genres" not in st.session_state:
     st.session_state.genres = []
 if "watched" not in st.session_state:
     st.session_state.watched = []
+if "temp_selected_genres" not in st.session_state:
+    st.session_state.temp_selected_genres = []
 
 if st.session_state.page == "login_signup":
     login_signup_page()
