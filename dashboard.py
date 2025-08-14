@@ -4,6 +4,7 @@ import joblib
 import numpy as np
 import json
 import os
+import random
 
 # ========= CONFIG =========
 USER_DATA_FILE = "user_data.json"
@@ -39,7 +40,7 @@ def update_watched(username, watched_list):
 # ========= LOAD MODEL =========
 @st.cache_resource
 def load_model():
-    df = joblib.load("movies_df.pkl")  # Must contain Poster_Link col
+    df = joblib.load("movies_df.pkl")  # Must have 'Poster_Link' column
     cosine_sim = joblib.load("cosine_similarity.pkl")
     indices = joblib.load("title_indices.pkl")
     return df, cosine_sim, indices
@@ -49,13 +50,24 @@ df, cosine_sim, indices = load_model()
 # ========= RECOMMENDER =========
 def recommend_for_user(preferred_genres, watched_titles, top_n=10):
     scores = np.zeros(len(df))
-    genre_weight = 0.5 if watched_titles else 2.0
-    watch_weight = 3.0 if watched_titles else 0.0
 
+    # Adaptive weights
+    if len(watched_titles) >= 3:
+        genre_weight = 0.3   # minimal genre influence after enough watches
+        watch_weight = 4.0   # strong watch influence
+    elif len(watched_titles) > 0:
+        genre_weight = 0.5
+        watch_weight = 3.5
+    else:
+        genre_weight = 2.0
+        watch_weight = 0.0
+
+    # Add genre boost
     for genre in preferred_genres:
         mask = df['Genre'].str.contains(genre, case=False, na=False)
         scores[mask] += genre_weight
 
+    # Add watched movie similarity boost
     for title in watched_titles:
         if title in indices:
             idx = indices[title]
@@ -65,6 +77,7 @@ def recommend_for_user(preferred_genres, watched_titles, top_n=10):
                 sim_vec = cosine_sim[idx]
             scores += watch_weight * sim_vec
 
+    # Remove already watched movies from consideration
     watched_idx = []
     for t in watched_titles:
         if t in indices:
@@ -75,19 +88,27 @@ def recommend_for_user(preferred_genres, watched_titles, top_n=10):
                 watched_idx.append(idx_val)
     scores[watched_idx] = -1
 
+    # Sort recommendations by score
     rec_idx = np.argsort(scores)[::-1]
     rec_df = df.iloc[rec_idx]
-    # Exclude watched
+
+    # Exclude watched from recommendations
     rec_df = rec_df[~rec_df['Series_Title'].isin(watched_titles)]
-    return rec_df.head(top_n)[['Series_Title', 'Genre', 'IMDB_Rating', 'Poster_Link']] \
-           if 'Poster_Link' in df.columns else rec_df.head(top_n)
+
+    # Maintain 2-3 results from signup genres if possible
+    signup_df = rec_df[rec_df['Genre'].str.contains('|'.join(preferred_genres), case=False)]
+    mixed_df = pd.concat([signup_df.head(3), rec_df]).drop_duplicates().head(top_n)
+
+    return mixed_df[['Series_Title', 'Genre', 'IMDB_Rating', 'Poster_Link']] \
+        if 'Poster_Link' in df.columns else mixed_df.head(top_n)
 
 # ========= MOVIE CARD =========
 def movie_card(row, watched_list, username, section, reason=None):
     col_img, col_info = st.columns([1, 3])
 
-    if 'Poster_Link' in row and pd.notna(row['Poster_Link']):
-        col_img.image(row['Poster_Link'], width=100)
+    poster = row.get('Poster_Link', None)
+    if poster and pd.notna(poster):
+        col_img.image(poster, width=100)
     else:
         col_img.image("https://via.placeholder.com/100x150.png?text=No+Image", width=100)
 
@@ -168,12 +189,28 @@ def dashboard():
 
     tab1, tab2, tab3 = st.tabs(["⭐ Top Rated", "🎥 Your Watching", "🎯 Recommendations"])
 
-    # --- Top Rated ---
+    # --- Top Rated with mixed genres ---
     with tab1:
-        st.subheader("Top IMDb Rated Movies")
-        top_movies = df.sort_values(by="IMDB_Rating", ascending=False).head(50)
-        top_movies = top_movies[~top_movies['Series_Title'].isin(st.session_state.watched)]
-        for _, row in top_movies.iterrows():
+        st.subheader("Top IMDb Rated Movies (Mixed Genres)")
+        top_movies = df.sort_values(by="IMDB_Rating", ascending=False)
+        # Ensure variety of genres
+        genre_groups = []
+        for genre in df['Genre'].str.split(', '):
+            genre_groups.extend(genre)
+        genre_groups = set(genre_groups)
+
+        mixed_list = []
+        for genre in genre_groups:
+            subset = top_movies[top_movies['Genre'].str.contains(genre, case=False, na=False)]
+            mixed_list.append(subset.head(3))  # top 3 per genre
+        
+        top_mixed_df = pd.concat(mixed_list).drop_duplicates(subset='Series_Title')
+        # Exclude watched
+        top_mixed_df = top_mixed_df[~top_mixed_df['Series_Title'].isin(st.session_state.watched)]
+        # Show top 50 random from this mixed set sorted by rating
+        top_mixed_df = top_mixed_df.sort_values(by="IMDB_Rating", ascending=False).head(50)
+
+        for _, row in top_mixed_df.iterrows():
             movie_card(row, st.session_state.watched, st.session_state.username, section="top")
 
     # --- Your Watching ---
@@ -214,9 +251,8 @@ def dashboard():
                     reasons_list.append("You watched " + ", ".join(watched_reasons))
                 if genre_matches:
                     reasons_list.append("You selected genre(s) " + ", ".join(genre_matches) + " at signup")
-
+                
                 reason_text = " and ".join(reasons_list) if reasons_list else None
-
                 movie_card(row, st.session_state.watched, st.session_state.username, section="rec", reason=reason_text)
 
 # ========= APP ROUTER =========
