@@ -6,10 +6,10 @@ import json
 import os
 from math import ceil
 
-# ========= CONFIG =========
+# ====== CONFIG ======
 USER_DATA_FILE = "user_data.json"
 
-# ========= USER DATA STORAGE =========
+# ====== USER DATA STORAGE ======
 def load_user_data():
     if os.path.exists(USER_DATA_FILE):
         with open(USER_DATA_FILE, "r") as f:
@@ -37,7 +37,7 @@ def update_watched(username, watched_list):
         data[username]['watched'] = watched_list
         save_user_data(data)
 
-# ========= LOAD MODEL =========
+# ====== LOAD MODEL ======
 @st.cache_resource
 def load_model():
     df = joblib.load("movies_df.pkl")
@@ -47,10 +47,9 @@ def load_model():
 
 df, cosine_sim, indices = load_model()
 
-# ========= RECOMMENDER =========
+# ====== RECOMMENDER ======
 def recommend_for_user(preferred_genres, watched_titles, top_n=10):
     scores = np.zeros(len(df))
-
     if len(watched_titles) >= 3:
         genre_weight = 0.3
         watch_weight = 4.0
@@ -93,16 +92,8 @@ def recommend_for_user(preferred_genres, watched_titles, top_n=10):
 
     return mixed_df[['Series_Title', 'Genre', 'IMDB_Rating']]
 
-# ========= MOVIE CARD =========
-def movie_card(
-    row,
-    watched_list,
-    username,
-    section,
-    reason=None,
-    show_button=True,
-    dark_mode=False
-):
+# ====== MOVIE CARD WITH CONTENT INSIDE ======
+def movie_card(row, watched_list, username, section, reason=None, show_button=True, dark_mode=False):
     bg_color = "#23272e" if dark_mode else "#fdfdfe"
     text_color = "#f5f5f5" if dark_mode else "#222"
     border_color = "#3d434d" if dark_mode else "#e2e3e6"
@@ -116,66 +107,59 @@ def movie_card(
     .movie-card {{
         border: 1.5px solid {border_color};
         border-radius: 16px;
-        padding: 18px 16px 10px 16px;
+        padding: 18px 16px;
         margin-bottom: 22px;
-        margin-right: 16px;
-        min-width: 215px;
-        max-width: 360px;
-        display: flex;
-        flex-direction: column;
         background: {bg_color};
         color: {text_color};
         box-shadow: {shadow};
-        transition: box-shadow 0.20s cubic-bezier(.4,0,.2,1), transform 0.18s cubic-bezier(.4,0,.2,1);
-        transform: translateY(0px) scale(1);
+        min-height: 150px;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-start;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
     }}
     .movie-card:hover {{
+        transform: translateY(-6px);
         box-shadow: {shadow_hover};
-        transform: translateY(-7px) scale(1.025);
-        z-index:2;
     }}
     .movie-title {{
-        font-size: 1.11rem;
+        font-size: 1.15rem;
         font-weight: 700;
         margin-bottom: 3px;
         white-space: normal;
         word-break: break-word;
     }}
     .movie-genres {{
-        font-size: 0.93rem;
+        font-size: 0.9rem;
         color: {genre_color};
         font-style: italic;
-        margin-bottom: 4px;
+        margin-bottom: 6px;
     }}
     .movie-rating {{
-        font-size: 1.35rem;
-        margin-bottom: 7px;
+        font-size: 1.3rem;
         color: {rating_color};
+        margin-bottom: 6px;
     }}
     .reason-text {{
-        font-size: 0.93rem;
+        font-size: 0.9rem;
         color: #399ed7;
-        margin-bottom: 7px;
+        margin-bottom: 8px;
     }}
     .watched-btn {{
-        background: #3868f6;
-        color: #fff;
+        background-color: #3868f6;
+        color: white;
         border: none;
-        padding: 4px 16px;
+        padding: 4px 14px;
         border-radius: 15px;
-        font-size: 0.98rem;
+        font-size: 0.9rem;
         font-weight: 600;
-        letter-spacing: .4px;
-        margin-top: 4px;
         cursor: pointer;
-        height: 29px;
-        box-shadow: 0 2px 5px #bac5ef22;
-        transition: background 0.2s;
+        height: 28px;
     }}
     .watched-btn:hover {{
-        background: #20499b;
+        background-color: #234bb5;
     }}
-    .watched-btn[disabled], .watched-btn:disabled {{
+    .watched-btn[disabled] {{
         background: #a0adb1;
         color: #ececec;
         cursor: not-allowed;
@@ -183,27 +167,28 @@ def movie_card(
     </style>
     """
     st.markdown(card_css, unsafe_allow_html=True)
-    with st.container():
-        st.markdown(f'<div class="movie-card">', unsafe_allow_html=True)
-        st.markdown(f'<div class="movie-title">{row["Series_Title"]}</div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="movie-genres">{row["Genre"]}</div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="movie-rating">⭐ <span style="font-size:1.07rem;color:#aaa;">{row["IMDB_Rating"]:.1f}/10</span></div>', unsafe_allow_html=True)
-        if reason:
-            st.markdown(f'<div class="reason-text">💡 {reason}</div>', unsafe_allow_html=True)
-        key = f"watched_btn_{section}_{row.name}"
-        # Show button only where allowed
-        if show_button:
-            if row['Series_Title'] not in watched_list:
-                # Button is inside the card!
-                if st.button("Watched", key=key):
-                    watched_list.append(row['Series_Title'])
-                    update_watched(username, watched_list)
-                    st.success(f"Added '{row['Series_Title']}' ✅")
-                    st.rerun()
-            else:
-                st.markdown(f'<button class="watched-btn" disabled>Watched</button>', unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
 
+    st.markdown('<div class="movie-card">', unsafe_allow_html=True)
+    st.markdown(f'<div class="movie-title">{row["Series_Title"]}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="movie-genres">{row["Genre"]}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="movie-rating">⭐ {row["IMDB_Rating"]:.1f}/10</div>', unsafe_allow_html=True)
+    if reason:
+        st.markdown(f'<div class="reason-text">💡 {reason}</div>', unsafe_allow_html=True)
+
+    if show_button:
+        key = f"watched_btn_{section}_{row.name}"
+        if row['Series_Title'] not in watched_list:
+            if st.button("Watched", key=key):
+                watched_list.append(row['Series_Title'])
+                update_watched(username, watched_list)
+                st.success(f"Added '{row['Series_Title']}' ✅")
+                st.rerun()
+        else:
+            st.markdown(f'<button class="watched-btn" disabled>Watched</button>', unsafe_allow_html=True)
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+# ====== RENDER MULTI-COLUMN GRID ======
 def render_cards(dataframe, watched_list, username, section, show_button=True, reason_map=None):
     cols_per_row = 3
     total_rows = ceil(len(dataframe) / cols_per_row)
@@ -216,12 +201,9 @@ def render_cards(dataframe, watched_list, username, section, show_button=True, r
                 row = dataframe.iloc[idx]
                 reason = reason_map.get(row['Series_Title']) if reason_map else None
                 with cols[c]:
-                    movie_card(
-                        row, watched_list, username, section, reason=reason,
-                        show_button=show_button, dark_mode=dark
-                    )
+                    movie_card(row, watched_list, username, section, reason, show_button, dark)
 
-# ========= SESSION STATE =========
+# ====== SESSION STATE INIT ======
 if "auth" not in st.session_state:
     st.session_state.auth = False
 if "username" not in st.session_state:
@@ -233,7 +215,7 @@ if "watched" not in st.session_state:
 if "dark_mode" not in st.session_state:
     st.session_state.dark_mode = False
 
-# ========= LOGIN/SIGNUP PAGE =========
+# ====== LOGIN/SIGNUP ======
 def login_signup_page():
     st.title("🎬 Movie Recommender Dashboard")
     option = st.radio("Select Option", ["Login", "Signup"], horizontal=True)
@@ -242,7 +224,7 @@ def login_signup_page():
         username = st.text_input("Choose Username")
         password = st.text_input("Choose Password", type="password")
         genres = st.multiselect("Select Favourite Genres",
-                               sorted(set(g for glist in df['Genre'].str.split(', ') for g in glist)))
+                                 sorted(set(g for glist in df['Genre'].str.split(', ') for g in glist)))
         if st.button("Signup"):
             if username and password and genres:
                 if signup_user(username, genres):
@@ -271,9 +253,9 @@ def login_signup_page():
             else:
                 st.error("User not found. Please sign up.")
 
-# ========= DASHBOARD =========
+# ====== DASHBOARD ======
 def dashboard():
-    st.sidebar.checkbox("🌙 Dark Mode", key="dark_mode", help="Toggle dark/light mode")
+    st.sidebar.checkbox("🌙 Dark Mode", key="dark_mode")
 
     st.markdown(f"### 👋 Welcome, **{st.session_state.username}**")
     st.markdown("---")
@@ -300,15 +282,14 @@ def dashboard():
         mixed_df = pd.concat(mixed_movies).drop_duplicates(subset="Series_Title")
         mixed_df = mixed_df[~mixed_df['Series_Title'].isin(st.session_state.watched)]
         mixed_df = mixed_df.sort_values(by="IMDB_Rating", ascending=False).head(50)
-        render_cards(mixed_df, st.session_state.watched, st.session_state.username, "top")
+        render_cards(mixed_df, st.session_state.watched, st.session_state.username, "top", show_button=True)
 
     # Your Watching
     with tab2:
         st.subheader("Your Watched Movies")
         if st.session_state.watched:
             watched_df = df[df['Series_Title'].isin(st.session_state.watched)]
-            render_cards(watched_df, st.session_state.watched, st.session_state.username,
-                         "your", show_button=False)
+            render_cards(watched_df, st.session_state.watched, st.session_state.username, "your", show_button=False)
         else:
             st.info("No watched movies yet.")
 
@@ -318,9 +299,7 @@ def dashboard():
         if not st.session_state.genres and not st.session_state.watched:
             st.warning("Add some genres or watched movies first.")
         else:
-            recs = recommend_for_user(st.session_state.genres,
-                                      st.session_state.watched,
-                                      top_n=10)
+            recs = recommend_for_user(st.session_state.genres, st.session_state.watched, top_n=10)
             reason_map = {}
             for idx, row in recs.iterrows():
                 watched_reasons = []
@@ -332,20 +311,16 @@ def dashboard():
                         if cosine_sim[w_idx][idx] > 0.1:
                             watched_reasons.append(watched)
                 watched_reasons = watched_reasons[:3]
-
                 genre_matches = [g for g in st.session_state.genres if g.lower() in row["Genre"].lower()][:3]
-
                 reasons_list = []
                 if watched_reasons:
                     reasons_list.append("You watched " + ", ".join(watched_reasons))
                 if genre_matches:
                     reasons_list.append("You selected genre(s) " + ", ".join(genre_matches))
-
                 reason_map[row['Series_Title']] = " and ".join(reasons_list) if reasons_list else None
-            render_cards(recs, st.session_state.watched, st.session_state.username,
-                         "rec", reason_map=reason_map)
+            render_cards(recs, st.session_state.watched, st.session_state.username, "rec", show_button=True, reason_map=reason_map)
 
-# ========= APP ENTRY =========
+# ====== ENTRY ======
 if not st.session_state.auth:
     login_signup_page()
 else:
