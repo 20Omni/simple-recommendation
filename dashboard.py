@@ -226,7 +226,7 @@ def genre_selection_page():
                 st.session_state.temp_selected_genres.remove(genre)
             else:
                 st.session_state.temp_selected_genres.append(genre)
-            st.experimental_rerun()
+            st.rerun()
     if st.button("Next ➡️"):
         if st.session_state.temp_selected_genres:
             update_user_genres(st.session_state.username, st.session_state.temp_selected_genres)
