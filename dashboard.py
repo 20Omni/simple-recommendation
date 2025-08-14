@@ -95,7 +95,34 @@ def recommend_for_user(preferred_genres, watched_titles, top_n=10):
     return mixed_df[['Series_Title', 'Genre', 'IMDB_Rating']]
 
 # ========= MOVIE CARD (all content inside) =========
-def movie_card(row, watched_list, username, section, reason=None, show_button=True, dark_mode=False):
+def movie_card(
+    row,
+    watched_list,
+    username,
+    section,
+    reason=None,
+    show_button=True,
+    dark_mode=False
+):
+    # Genre to emoji mapping (extend as you like)
+    genre_emojis = {
+        "action": "🎬",
+        "comedy": "😂",
+        "drama": "🎭",
+        "romance": "❤️",
+        "thriller": "🔪",
+        "horror": "👻",
+        "sci-fi": "👽",
+        "adventure": "🧭",
+        "fantasy": "🦄",
+        "animation": "🐭",
+        "documentary": "🎥"
+    }
+
+    # Extract first genre, lowercase, map to emoji or default
+    first_genre = row["Genre"].split(",")[0].strip().lower()
+    emoji = genre_emojis.get(first_genre, "🎞️")  # default emoji
+
     bg_color = "#23272e" if dark_mode else "#fdfdfe"
     text_color = "#f5f5f5" if dark_mode else "#222"
     border_color = "#3d434d" if dark_mode else "#e2e3e6"
@@ -104,8 +131,7 @@ def movie_card(row, watched_list, username, section, reason=None, show_button=Tr
     shadow = "0 2px 7px rgba(56,67,102,0.10)" if dark_mode else "0 1.5px 6px rgba(80,95,130,0.08)"
     shadow_hover = "0 8px 22px rgba(64,82,133,0.17)" if dark_mode else "0 8px 22px rgba(64,82,133,0.14)"
 
-    # CSS
-    st.markdown(f"""
+    card_css = f"""
     <style>
     .movie-card {{
         border: 1.5px solid {border_color};
@@ -122,26 +148,65 @@ def movie_card(row, watched_list, username, section, reason=None, show_button=Tr
         transform: translateY(-6px);
         box-shadow: {shadow_hover};
     }}
-    .movie-title {{ font-size: 1.15rem; font-weight: 700; margin-bottom: 3px; }}
-    .movie-genres {{ font-size: 0.9rem; color: {genre_color}; font-style: italic; margin-bottom: 6px; }}
-    .movie-rating {{ font-size: 1.2rem; color: {rating_color}; margin-bottom: 6px; }}
-    .reason-text {{ font-size: 0.9rem; color: #399ed7; margin-bottom: 8px; }}
+    .movie-title {{
+        font-size: 1.15rem;
+        font-weight: 700;
+        margin-bottom: 3px;
+    }}
+    .movie-genres {{
+        font-size: 0.9rem;
+        color: {genre_color};
+        font-style: italic;
+        margin-bottom: 6px;
+    }}
+    .movie-rating {{
+        font-size: 1.2rem;
+        color: {rating_color};
+        margin-bottom: 6px;
+    }}
+    .reason-text {{
+        font-size: 0.9rem;
+        color: #399ed7;
+        margin-bottom: 8px;
+    }}
+    .watched-btn {{
+        background-color: #3868f6;
+        color: white;
+        border: none;
+        padding: 4px 14px;
+        border-radius: 15px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        cursor: pointer;
+        height: 28px;
+        transition: background-color 0.2s;
+    }}
+    .watched-btn:hover {{
+        background-color: #234bb5;
+    }}
+    .watched-btn[disabled] {{
+        background: #a0adb1;
+        color: #ececec;
+        cursor: not-allowed;
+    }}
     </style>
-    """, unsafe_allow_html=True)
+    """
+    st.markdown(card_css, unsafe_allow_html=True)
 
-    # Build HTML content part
-    html = f'<div class="movie-card">'
-    html += f'<div class="movie-title">{row["Series_Title"]}</div>'
-    html += f'<div class="movie-genres">{row["Genre"]}</div>'
-    html += f'<div class="movie-rating">⭐ {row["IMDB_Rating"]:.1f}/10</div>'
+    st.markdown('<div class="movie-card">', unsafe_allow_html=True)
+    st.markdown(f'<div class="movie-title">{row["Series_Title"]}</div>', unsafe_allow_html=True)
+
+    # Insert emoji before genres
+    genres_with_emoji = f"{emoji} {row['Genre']}"
+    st.markdown(f'<div class="movie-genres">{genres_with_emoji}</div>', unsafe_allow_html=True)
+
+    st.markdown(f'<div class="movie-rating">⭐ {row["IMDB_Rating"]:.1f}/10</div>', unsafe_allow_html=True)
+
     if reason:
-        html += f'<div class="reason-text">💡 {reason}</div>'
-    html += '</div>'
-    st.markdown(html, unsafe_allow_html=True)
+        st.markdown(f'<div class="reason-text">💡 {reason}</div>', unsafe_allow_html=True)
 
-    # Put button separately but visually it's inside box flow
+    key = f"watched_btn_{section}_{row.name}"
     if show_button:
-        key = f"watched_btn_{section}_{row.name}"
         if row['Series_Title'] not in watched_list:
             if st.button("Watched", key=key):
                 watched_list.append(row['Series_Title'])
@@ -149,7 +214,10 @@ def movie_card(row, watched_list, username, section, reason=None, show_button=Tr
                 st.success(f"Added '{row['Series_Title']}' ✅")
                 st.rerun()
         else:
-            st.button("Watched", key=key, disabled=True)
+            st.markdown('<button class="watched-btn" disabled>Watched</button>', unsafe_allow_html=True)
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
 
 # ========= RENDER GRID =========
 def render_cards(dataframe, watched_list, username, section, show_button=True, reason_map=None):
