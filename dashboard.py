@@ -40,7 +40,7 @@ def update_watched(username, watched_list):
 # ========= LOAD MODEL =========
 @st.cache_resource
 def load_model():
-    df = joblib.load("movies_df.pkl")   # should include Series_Title, Genre, IMDB_Rating
+    df = joblib.load("movies_df.pkl")
     cosine_sim = joblib.load("cosine_similarity.pkl")
     indices = joblib.load("title_indices.pkl")
     return df, cosine_sim, indices
@@ -50,7 +50,7 @@ df, cosine_sim, indices = load_model()
 # ========= RECOMMENDER =========
 def recommend_for_user(preferred_genres, watched_titles, top_n=10):
     scores = np.zeros(len(df))
-    # Adaptive weighting
+
     if len(watched_titles) >= 3:
         genre_weight = 0.3
         watch_weight = 4.0
@@ -88,41 +88,49 @@ def recommend_for_user(preferred_genres, watched_titles, top_n=10):
     rec_df = df.iloc[rec_idx]
     rec_df = rec_df[~rec_df['Series_Title'].isin(watched_titles)]
 
-    # Keep a few from signup genres
     signup_df = rec_df[rec_df['Genre'].str.contains('|'.join(preferred_genres), case=False)]
     mixed_df = pd.concat([signup_df.head(3), rec_df]).drop_duplicates().head(top_n)
 
     return mixed_df[['Series_Title', 'Genre', 'IMDB_Rating']]
 
-# ========= MOVIE CARD (all content inside) =========
-def movie_card(
-    row,
-    watched_list,
-    username,
-    section,
-    reason=None,
-    show_button=True,
-    dark_mode=False
-):
-    # Genre to emoji mapping (extend as you like)
-    genre_emojis = {
-        "action": "🎬",
-        "comedy": "😂",
-        "drama": "🎭",
-        "romance": "❤️",
-        "thriller": "🔪",
-        "horror": "👻",
-        "sci-fi": "👽",
-        "adventure": "🧭",
-        "fantasy": "🦄",
-        "animation": "🐭",
-        "documentary": "🎥"
-    }
+# ========= GENRE EMOJI MAPPING =========
+genre_emojis = {
+    "action": "🎬",
+    "comedy": "😂",
+    "drama": "🎭",
+    "romance": "❤️",
+    "thriller": "🔪",
+    "horror": "👻",
+    "sci-fi": "👽",
+    "science fiction": "👽",
+    "adventure": "🧭",
+    "fantasy": "🦄",
+    "animation": "🐭",
+    "documentary": "🎥",
+    "crime": "🕵️",
+    "mystery": "🕵️",
+    "war": "⚔️",
+    "musical": "🎶",
+    "music": "🎶"
+}
 
-    # Extract first genre, lowercase, map to emoji or default
-    first_genre = row["Genre"].split(",")[0].strip().lower()
-    emoji = genre_emojis.get(first_genre, "🎞️")  # default emoji
+def get_dominant_genre_with_emoji(genre_string, signup_genres=None):
+    genre_list = [g.strip() for g in genre_string.split(",")]
+    # If user has signup genres, pick the one from signup if present
+    if signup_genres:
+        for sg in signup_genres:
+            for g in genre_list:
+                if sg.lower() in g.lower():
+                    return f"{genre_emojis.get(g.lower(), '🎞️')} {genre_string}"
+    # Otherwise, pick the first mapped genre in known emojis list
+    for g in genre_list:
+        if g.lower() in genre_emojis:
+            return f"{genre_emojis[g.lower()]} {genre_string}"
+    # Default
+    return f"🎞️ {genre_string}"
 
+# ========= MOVIE CARD =========
+def movie_card(row, watched_list, username, section, reason=None, show_button=True, dark_mode=False, signup_genres=None):
     bg_color = "#23272e" if dark_mode else "#fdfdfe"
     text_color = "#f5f5f5" if dark_mode else "#222"
     border_color = "#3d434d" if dark_mode else "#e2e3e6"
@@ -131,12 +139,12 @@ def movie_card(
     shadow = "0 2px 7px rgba(56,67,102,0.10)" if dark_mode else "0 1.5px 6px rgba(80,95,130,0.08)"
     shadow_hover = "0 8px 22px rgba(64,82,133,0.17)" if dark_mode else "0 8px 22px rgba(64,82,133,0.14)"
 
-    card_css = f"""
+    st.markdown(f"""
     <style>
     .movie-card {{
         border: 1.5px solid {border_color};
         border-radius: 16px;
-        padding: 18px 16px;
+        padding: 16px;
         margin-bottom: 22px;
         background: {bg_color};
         color: {text_color};
@@ -148,65 +156,27 @@ def movie_card(
         transform: translateY(-6px);
         box-shadow: {shadow_hover};
     }}
-    .movie-title {{
-        font-size: 1.15rem;
-        font-weight: 700;
-        margin-bottom: 3px;
-    }}
-    .movie-genres {{
-        font-size: 0.9rem;
-        color: {genre_color};
-        font-style: italic;
-        margin-bottom: 6px;
-    }}
-    .movie-rating {{
-        font-size: 1.2rem;
-        color: {rating_color};
-        margin-bottom: 6px;
-    }}
-    .reason-text {{
-        font-size: 0.9rem;
-        color: #399ed7;
-        margin-bottom: 8px;
-    }}
-    .watched-btn {{
-        background-color: #3868f6;
-        color: white;
-        border: none;
-        padding: 4px 14px;
-        border-radius: 15px;
-        font-size: 0.9rem;
-        font-weight: 600;
-        cursor: pointer;
-        height: 28px;
-        transition: background-color 0.2s;
-    }}
-    .watched-btn:hover {{
-        background-color: #234bb5;
-    }}
-    .watched-btn[disabled] {{
-        background: #a0adb1;
-        color: #ececec;
-        cursor: not-allowed;
-    }}
+    .movie-title {{ font-size: 1.15rem; font-weight: 700; margin-bottom: 4px; }}
+    .movie-genres {{ font-size: 0.9rem; color: {genre_color}; font-style: italic; margin-bottom: 6px; }}
+    .movie-rating {{ font-size: 1.2rem; color: {rating_color}; margin-bottom: 6px; }}
+    .reason-text {{ font-size: 0.9rem; color: #399ed7; margin-bottom: 8px; }}
     </style>
-    """
-    st.markdown(card_css, unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
 
-    st.markdown('<div class="movie-card">', unsafe_allow_html=True)
-    st.markdown(f'<div class="movie-title">{row["Series_Title"]}</div>', unsafe_allow_html=True)
-
-    # Insert emoji before genres
-    genres_with_emoji = f"{emoji} {row['Genre']}"
-    st.markdown(f'<div class="movie-genres">{genres_with_emoji}</div>', unsafe_allow_html=True)
-
-    st.markdown(f'<div class="movie-rating">⭐ {row["IMDB_Rating"]:.1f}/10</div>', unsafe_allow_html=True)
-
+    # Build card HTML
+    genre_with_emoji = get_dominant_genre_with_emoji(row["Genre"], signup_genres)
+    html = f'<div class="movie-card">'
+    html += f'<div class="movie-title">{row["Series_Title"]}</div>'
+    html += f'<div class="movie-genres">{genre_with_emoji}</div>'
+    html += f'<div class="movie-rating">⭐ {row["IMDB_Rating"]:.1f}/10</div>'
     if reason:
-        st.markdown(f'<div class="reason-text">💡 {reason}</div>', unsafe_allow_html=True)
+        html += f'<div class="reason-text">💡 {reason}</div>'
+    html += '</div>'
+    st.markdown(html, unsafe_allow_html=True)
 
-    key = f"watched_btn_{section}_{row.name}"
+    # Action button (only in appropriate tabs)
     if show_button:
+        key = f"watched_btn_{section}_{row.name}"
         if row['Series_Title'] not in watched_list:
             if st.button("Watched", key=key):
                 watched_list.append(row['Series_Title'])
@@ -214,13 +184,10 @@ def movie_card(
                 st.success(f"Added '{row['Series_Title']}' ✅")
                 st.rerun()
         else:
-            st.markdown('<button class="watched-btn" disabled>Watched</button>', unsafe_allow_html=True)
-
-    st.markdown('</div>', unsafe_allow_html=True)
-
+            st.button("Watched", key=key, disabled=True)
 
 # ========= RENDER GRID =========
-def render_cards(dataframe, watched_list, username, section, show_button=True, reason_map=None):
+def render_cards(dataframe, watched_list, username, section, show_button=True, reason_map=None, signup_genres=None):
     cols_per_row = 3
     total_rows = ceil(len(dataframe) / cols_per_row)
     dark = st.session_state.dark_mode
@@ -232,7 +199,7 @@ def render_cards(dataframe, watched_list, username, section, show_button=True, r
                 row = dataframe.iloc[idx]
                 reason = reason_map.get(row['Series_Title']) if reason_map else None
                 with cols[c]:
-                    movie_card(row, watched_list, username, section, reason, show_button, dark)
+                    movie_card(row, watched_list, username, section, reason, show_button, dark, signup_genres)
 
 # ========= SESSION STATE INIT =========
 if "auth" not in st.session_state:
@@ -299,7 +266,7 @@ def dashboard():
 
     tab1, tab2, tab3 = st.tabs(["⭐ Top Rated", "🎥 Your Watching", "🎯 Recommendations"])
 
-    # Top Rated tab
+    # Top Rated
     with tab1:
         st.subheader("Top IMDb Rated Movies (Mixed Genres)")
         top_movies = df.sort_values(by="IMDB_Rating", ascending=False)
@@ -313,18 +280,18 @@ def dashboard():
         mixed_df = pd.concat(mixed_movies).drop_duplicates(subset="Series_Title")
         mixed_df = mixed_df[~mixed_df['Series_Title'].isin(st.session_state.watched)]
         mixed_df = mixed_df.sort_values(by="IMDB_Rating", ascending=False).head(50)
-        render_cards(mixed_df, st.session_state.watched, st.session_state.username, "top", show_button=True)
+        render_cards(mixed_df, st.session_state.watched, st.session_state.username, "top", show_button=True, signup_genres=st.session_state.genres)
 
-    # Your Watching tab
+    # Your Watching
     with tab2:
         st.subheader("Your Watched Movies")
         if st.session_state.watched:
             watched_df = df[df['Series_Title'].isin(st.session_state.watched)]
-            render_cards(watched_df, st.session_state.watched, st.session_state.username, "your", show_button=False)
+            render_cards(watched_df, st.session_state.watched, st.session_state.username, "your", show_button=False, signup_genres=st.session_state.genres)
         else:
             st.info("No watched movies yet.")
 
-    # Recommendations tab
+    # Recommendations
     with tab3:
         st.subheader("Recommended for You")
         if not st.session_state.genres and not st.session_state.watched:
@@ -349,7 +316,7 @@ def dashboard():
                 if genre_matches:
                     reasons_list.append(f"You selected genre(s) " + ", ".join(genre_matches))
                 reason_map[row['Series_Title']] = " and ".join(reasons_list) if reasons_list else None
-            render_cards(recs, st.session_state.watched, st.session_state.username, "rec", show_button=True, reason_map=reason_map)
+            render_cards(recs, st.session_state.watched, st.session_state.username, "rec", show_button=True, reason_map=reason_map, signup_genres=st.session_state.genres)
 
 # ========= APP ENTRY =========
 if not st.session_state.auth:
