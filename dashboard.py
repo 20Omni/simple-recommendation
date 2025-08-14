@@ -45,7 +45,7 @@ def update_watched(username, watched_list):
 # ===== Load Model/Data =====
 @st.cache_resource
 def load_model():
-    df = joblib.load("movies_df.pkl")
+    df = joblib.load("movies_df.pkl")   # Must have Series_Title, Genre, IMDB_Rating columns
     cosine_sim = joblib.load("cosine_similarity.pkl")
     indices = joblib.load("title_indices.pkl")
     return df, cosine_sim, indices
@@ -154,8 +154,8 @@ def movie_card(row, watched_list, username, section, reason=None, show_button=Tr
     }}
     .movie-genres {{
         font-size: 0.9rem;
-        color: {genre_color};
         margin-bottom: 6px;
+        color: {genre_color};
     }}
     .movie-rating {{
         font-size: 1.2rem;
@@ -205,7 +205,6 @@ def search_and_render(df_tab, search_key, watched_list, username, section, show_
             for i, s in enumerate(suggestions):
                 if cols[i].button(s, key=f"sugg_{search_key}_{i}"):
                     search_query = s.lower()
-                    # Re-filter display_df based on click
                     display_df = df_tab[
                         df_tab["Series_Title"].str.lower().str.contains(search_query) |
                         df_tab["Genre"].str.lower().str.contains(search_query)
@@ -246,7 +245,6 @@ def login_signup_page():
             if username and password:
                 if signup_user(username):
                     st.session_state.username = username
-                    # Clear data for new user
                     st.session_state.watched = []
                     st.session_state.genres = []
                     st.session_state.temp_selected_genres = []
@@ -277,25 +275,29 @@ def genre_selection_page():
     st.title(f"Welcome, {st.session_state.username}!")
     st.subheader("Select your favourite genres")
     all_genres = sorted(set(g for glist in df['Genre'].str.split(', ') for g in glist))
-    if "temp_selected_genres" not in st.session_state or not st.session_state.genres:
+    if "temp_selected_genres" not in st.session_state:
         st.session_state.temp_selected_genres = []
+
     cols = st.columns(4)
     for i, genre in enumerate(all_genres):
         col = cols[i % 4]
-        label = f"✅ {genre}" if genre in st.session_state.temp_selected_genres else genre
+        selected = genre in st.session_state.temp_selected_genres
+        label = f"✅ {genre}" if selected else genre
         if col.button(label, key=f"btn_{genre}"):
-            if genre in st.session_state.temp_selected_genres:
+            if selected:
                 st.session_state.temp_selected_genres.remove(genre)
             else:
                 st.session_state.temp_selected_genres.append(genre)
-    if st.button("Next"):
+            st.rerun()
+
+    if st.button("Next ➡️"):
         if st.session_state.temp_selected_genres:
             update_user_genres(st.session_state.username, st.session_state.temp_selected_genres)
-            st.session_state.genres = st.session_state.temp_selected_genres
+            st.session_state.genres = st.session_state.temp_selected_genres.copy()
             st.session_state.page = "dashboard"
             st.rerun()
         else:
-            st.error("Select at least one genre")
+            st.error("Please select at least one genre to continue.")
 
 def dashboard_page():
     st.sidebar.checkbox("🌙 Dark Mode", key="dark_mode")
