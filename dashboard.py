@@ -144,7 +144,7 @@ def search_and_render(df_tab, search_key, watched_list, username, section,
             for i, title in enumerate(suggestions):
                 if cols[i].button(title, key=f"sugg_{search_key}_{i}"):
                     st.session_state[search_key] = title
-                    st.experimental_rerun()
+                    st.rerun()
         else:
             st.warning("No results found")
             return
