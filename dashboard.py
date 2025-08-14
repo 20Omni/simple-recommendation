@@ -40,7 +40,7 @@ def update_watched(username, watched_list):
 # ========= LOAD MODEL =========
 @st.cache_resource
 def load_model():
-    df = joblib.load("movies_df.pkl")
+    df = joblib.load("movies_df.pkl")   # Series_Title, Genre, IMDB_Rating columns
     cosine_sim = joblib.load("cosine_similarity.pkl")
     indices = joblib.load("title_indices.pkl")
     return df, cosine_sim, indices
@@ -50,7 +50,6 @@ df, cosine_sim, indices = load_model()
 # ========= RECOMMENDER =========
 def recommend_for_user(preferred_genres, watched_titles, top_n=10):
     scores = np.zeros(len(df))
-
     if len(watched_titles) >= 3:
         genre_weight = 0.3
         watch_weight = 4.0
@@ -88,12 +87,13 @@ def recommend_for_user(preferred_genres, watched_titles, top_n=10):
     rec_df = df.iloc[rec_idx]
     rec_df = rec_df[~rec_df['Series_Title'].isin(watched_titles)]
 
+    # keep a few from signup genres
     signup_df = rec_df[rec_df['Genre'].str.contains('|'.join(preferred_genres), case=False)]
     mixed_df = pd.concat([signup_df.head(3), rec_df]).drop_duplicates().head(top_n)
 
     return mixed_df[['Series_Title', 'Genre', 'IMDB_Rating']]
 
-# ========= GENRE EMOJI MAPPING =========
+# ========= GENRE EMOJIS =========
 genre_emojis = {
     "action": "🎬",
     "comedy": "😂",
@@ -115,19 +115,16 @@ genre_emojis = {
 }
 
 def get_dominant_genre_with_emoji(genre_string, signup_genres=None):
-    genre_list = [g.strip() for g in genre_string.split(",")]
-    # If user has signup genres, pick the one from signup if present
+    genres_list = [g.strip() for g in genre_string.split(",")]
     if signup_genres:
         for sg in signup_genres:
-            for g in genre_list:
+            for g in genres_list:
                 if sg.lower() in g.lower():
-                    return f"{genre_emojis.get(g.lower(), '🎞️')} {genre_string}"
-    # Otherwise, pick the first mapped genre in known emojis list
-    for g in genre_list:
+                    return genre_emojis.get(g.lower(), "🎞️"), genre_string
+    for g in genres_list:
         if g.lower() in genre_emojis:
-            return f"{genre_emojis[g.lower()]} {genre_string}"
-    # Default
-    return f"🎞️ {genre_string}"
+            return genre_emojis[g.lower()], genre_string
+    return "🎞️", genre_string
 
 # ========= MOVIE CARD =========
 def movie_card(row, watched_list, username, section, reason=None, show_button=True, dark_mode=False, signup_genres=None):
@@ -139,6 +136,9 @@ def movie_card(row, watched_list, username, section, reason=None, show_button=Tr
     shadow = "0 2px 7px rgba(56,67,102,0.10)" if dark_mode else "0 1.5px 6px rgba(80,95,130,0.08)"
     shadow_hover = "0 8px 22px rgba(64,82,133,0.17)" if dark_mode else "0 8px 22px rgba(64,82,133,0.14)"
 
+    emoji, genre_text = get_dominant_genre_with_emoji(row["Genre"], signup_genres)
+
+    # CSS
     st.markdown(f"""
     <style>
     .movie-card {{
@@ -157,24 +157,24 @@ def movie_card(row, watched_list, username, section, reason=None, show_button=Tr
         box-shadow: {shadow_hover};
     }}
     .movie-title {{ font-size: 1.15rem; font-weight: 700; margin-bottom: 4px; }}
-    .movie-genres {{ font-size: 0.9rem; color: {genre_color}; font-style: italic; margin-bottom: 6px; }}
+    .movie-genres {{ font-size: 0.9rem; color: {genre_color}; margin-bottom: 6px; }}
     .movie-rating {{ font-size: 1.2rem; color: {rating_color}; margin-bottom: 6px; }}
     .reason-text {{ font-size: 0.9rem; color: #399ed7; margin-bottom: 8px; }}
     </style>
     """, unsafe_allow_html=True)
 
-    # Build card HTML
-    genre_with_emoji = get_dominant_genre_with_emoji(row["Genre"], signup_genres)
+    # HTML content: emoji non-italic, genre italic
     html = f'<div class="movie-card">'
     html += f'<div class="movie-title">{row["Series_Title"]}</div>'
-    html += f'<div class="movie-genres">{genre_with_emoji}</div>'
+    html += f'<div class="movie-genres"><span style="font-style: normal;">{emoji}</span> <span style="font-style: italic;">{genre_text}</span></div>'
     html += f'<div class="movie-rating">⭐ {row["IMDB_Rating"]:.1f}/10</div>'
     if reason:
         html += f'<div class="reason-text">💡 {reason}</div>'
     html += '</div>'
+
     st.markdown(html, unsafe_allow_html=True)
 
-    # Action button (only in appropriate tabs)
+    # Action button
     if show_button:
         key = f"watched_btn_{section}_{row.name}"
         if row['Series_Title'] not in watched_list:
@@ -254,7 +254,6 @@ def login_signup_page():
 # ========= DASHBOARD =========
 def dashboard():
     st.sidebar.checkbox("🌙 Dark Mode", key="dark_mode")
-
     st.markdown(f"### 👋 Welcome, **{st.session_state.username}**")
     st.markdown("---")
     if st.button("🚪 Logout"):
@@ -266,7 +265,7 @@ def dashboard():
 
     tab1, tab2, tab3 = st.tabs(["⭐ Top Rated", "🎥 Your Watching", "🎯 Recommendations"])
 
-    # Top Rated
+    # Top Rated tab
     with tab1:
         st.subheader("Top IMDb Rated Movies (Mixed Genres)")
         top_movies = df.sort_values(by="IMDB_Rating", ascending=False)
@@ -282,7 +281,7 @@ def dashboard():
         mixed_df = mixed_df.sort_values(by="IMDB_Rating", ascending=False).head(50)
         render_cards(mixed_df, st.session_state.watched, st.session_state.username, "top", show_button=True, signup_genres=st.session_state.genres)
 
-    # Your Watching
+    # Watching tab
     with tab2:
         st.subheader("Your Watched Movies")
         if st.session_state.watched:
@@ -291,7 +290,7 @@ def dashboard():
         else:
             st.info("No watched movies yet.")
 
-    # Recommendations
+    # Recommendations tab
     with tab3:
         st.subheader("Recommended for You")
         if not st.session_state.genres and not st.session_state.watched:
@@ -318,7 +317,7 @@ def dashboard():
                 reason_map[row['Series_Title']] = " and ".join(reasons_list) if reasons_list else None
             render_cards(recs, st.session_state.watched, st.session_state.username, "rec", show_button=True, reason_map=reason_map, signup_genres=st.session_state.genres)
 
-# ========= APP ENTRY =========
+# ========= ENTRY =========
 if not st.session_state.auth:
     login_signup_page()
 else:
