@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import joblib
 import numpy as np
@@ -7,24 +8,47 @@ from math import ceil
 
 USER_DATA_FILE = "user_data.json"
 
+# ===== Session defaults =====
+for k, v in {
+    "page": "login_signup",
+    "genres": [],
+    "watched": [],
+    "temp_selected_genres": [],
+    "username": "",
+    "dark_mode": False,
+    "_scroll_once": False,   # one-time flag to scroll after genre -> dashboard
+}.items():
+    if k not in st.session_state:
+        st.session_state[k] = v
+
 # ===== User Data =====
 def load_user_data():
     if os.path.exists(USER_DATA_FILE):
-        with open(USER_DATA_FILE, "r") as f: return json.load(f)
+        with open(USER_DATA_FILE, "r") as f:
+            return json.load(f)
     return {}
+
 def save_user_data(data):
-    with open(USER_DATA_FILE, "w") as f: json.dump(data, f)
+    with open(USER_DATA_FILE, "w") as f:
+        json.dump(data, f)
+
 def signup_user(username):
     data = load_user_data()
-    if username in data: return False
+    if username in data:
+        return False
     data[username] = {"genres": [], "watched": []}
-    save_user_data(data); return True
-def load_user(username): return load_user_data().get(username)
+    save_user_data(data)
+    return True
+
+def load_user(username):
+    return load_user_data().get(username)
+
 def update_user_genres(username, genres):
     data = load_user_data()
     if username in data:
         data[username]["genres"] = genres
         save_user_data(data)
+
 def update_watched(username, watched_list):
     data = load_user_data()
     if username in data:
@@ -38,31 +62,51 @@ def load_model():
     cosine_sim = joblib.load("cosine_similarity.pkl")
     indices = joblib.load("title_indices.pkl")
     return df, cosine_sim, indices
+
 df, cosine_sim, indices = load_model()
 
 # ===== Recommendation =====
 def recommend_for_user(preferred_genres, watched_titles, top_n=10):
     scores = np.zeros(len(df))
-    if len(watched_titles) >= 3: genre_weight, watch_weight = 0.3, 4.0
-    elif watched_titles: genre_weight, watch_weight = 0.5, 3.5
-    else: genre_weight, watch_weight = 2.0, 0.0
+
+    if len(watched_titles) >= 3:
+        genre_weight, watch_weight = 0.3, 4.0
+    elif watched_titles:
+        genre_weight, watch_weight = 0.5, 3.5
+    else:
+        genre_weight, watch_weight = 2.0, 0.0
+
+    # boost by selected genres
     for genre in preferred_genres:
-        scores[df['Genre'].str.contains(genre, case=False, na=False)] += genre_weight
+        mask = df['Genre'].str.contains(genre, case=False, na=False)
+        scores[mask] += genre_weight
+
+    # boost by watched-title similarities
     for title in watched_titles:
         if title in indices:
             idx = indices[title]
-            sim_vec = cosine_sim[idx].mean(axis=0) if isinstance(idx,(pd.Series,list,np.ndarray)) else cosine_sim[idx]
+            sim_vec = cosine_sim[idx].mean(axis=0) if isinstance(idx, (pd.Series, list, np.ndarray)) else cosine_sim[idx]
             scores += watch_weight * sim_vec
+
+    # suppress already-watched
     watched_idx = []
     for t in watched_titles:
         if t in indices:
             idx_val = indices[t]
-            watched_idx.extend(idx_val if isinstance(idx_val,(pd.Series,list,np.ndarray)) else [idx_val])
-    scores[watched_idx] = -1
+            watched_idx.extend(idx_val if isinstance(idx_val, (pd.Series, list, np.ndarray)) else [idx_val])
+    if watched_idx:
+        scores[np.array(watched_idx)] = -1
+
     rec_df = df.iloc[np.argsort(scores)[::-1]]
     rec_df = rec_df[~rec_df['Series_Title'].isin(watched_titles)]
-    signup_df = rec_df[rec_df['Genre'].str.contains('|'.join(preferred_genres), case=False)]
-    return pd.concat([signup_df.head(3), rec_df]).drop_duplicates().head(top_n)[['Series_Title','Genre','IMDB_Rating']]
+    if preferred_genres:
+        preferred_mask = rec_df['Genre'].str.contains('|'.join(map(repr, preferred_genres)).replace("'", ""), case=False, na=False)
+        signup_df = rec_df[preferred_mask]
+    else:
+        signup_df = rec_df
+
+    result = pd.concat([signup_df.head(3), rec_df]).drop_duplicates('Series_Title').head(top_n)
+    return result[['Series_Title', 'Genre', 'IMDB_Rating']]
 
 # ===== Genre Emojis =====
 genre_emojis = {
@@ -70,13 +114,14 @@ genre_emojis = {
     "sci-fi":"👽","science fiction":"👽","adventure":"🧭","fantasy":"🦄","animation":"🐭",
     "documentary":"🎥","crime":"🕵️","mystery":"🕵️","war":"⚔️","musical":"🎶","music":"🎶"
 }
+
 def get_dominant_genre_with_emoji(genre_string, signup_genres=None):
-    genres_list = [g.strip() for g in genre_string.split(",")]
+    genres_list = [g.strip() for g in str(genre_string).split(",")]
     if signup_genres:
         for sg in signup_genres:
             for g in genres_list:
                 if sg.lower() in g.lower():
-                    return genre_emojis.get(g.lower(),"🎞️"), genre_string
+                    return genre_emojis.get(g.lower(), "🎞️"), genre_string
     for g in genres_list:
         if g.lower() in genre_emojis:
             return genre_emojis[g.lower()], genre_string
@@ -99,7 +144,7 @@ def movie_card(row, watched_list, username, section, reason=None, show_button=Tr
         <div style="font-size:0.9rem;color:{genre_color};margin-bottom:6px;">
             <span>{emoji}</span> <span style="font-style: italic;">{genre_text}</span>
         </div>
-        <div style="font-size:1.2rem;color:{rating_c};margin-bottom:6px;">⭐ {row["IMDB_Rating"]:.1f}/10</div>
+        <div style="font-size:1.2rem;color:{rating_c};margin-bottom:6px;">⭐ {float(row["IMDB_Rating"]):.1f}/10</div>
         {f'<div style="font-size:0.9rem;color:#399ed7;margin-bottom:8px;">💡 {reason}</div>' if reason else ""}
     </div>
     '''
@@ -116,56 +161,73 @@ def movie_card(row, watched_list, username, section, reason=None, show_button=Tr
 
 # ===== Render Cards =====
 def render_cards(dfdata, watched_list, username, section, show_button=True, reason_map=None, signup_genres=None):
+    if dfdata is None or len(dfdata) == 0:
+        st.warning("No results found")
+        return
     cols_per_row = 3
-    for r in range(ceil(len(dfdata)/cols_per_row)):
+    for r in range(ceil(len(dfdata) / cols_per_row)):
         cols = st.columns(cols_per_row, gap="large")
         for c in range(cols_per_row):
-            idx = r*cols_per_row + c
+            idx = r * cols_per_row + c
             if idx < len(dfdata):
                 row = dfdata.iloc[idx]
                 reason = reason_map.get(row['Series_Title']) if reason_map else None
                 with cols[c]:
                     movie_card(row, watched_list, username, section, reason, show_button, signup_genres)
 
-# ===== Improved Live Search with Instant Suggestions =====
+# ===== Live Search with Instant Suggestions =====
 def search_and_render(df_tab, search_key, watched_list, username, section,
                       show_button=True, reason_map=None, signup_genres=None):
-    search_query = st.session_state.get(search_key, "").strip().lower()
-    search_input = st.text_input("🔍 Search by movie title or genre",
-                                 value=search_query,
-                                 key=f"{search_key}_input",
-                                 placeholder="Type to search...").strip().lower()
+    """
+    - Live suggestions update as you type
+    - Clicking a suggestion applies immediately
+    - If no matches, show 'No results found' and do not render cards
+    """
+    input_key = f"{search_key}_q"
+    if input_key not in st.session_state:
+        st.session_state[input_key] = ""
 
-    # Update session state live
-    if search_input != search_query:
-        st.session_state[search_key] = search_input
+    # Text input that reruns on every keystroke
+    query_raw = st.text_input(
+        "🔍 Search by movie title or genre",
+        key=input_key,
+        placeholder="Type to search..."
+    )
+    query = query_raw.strip().lower()
 
-    filtered_df = df_tab
-    if search_input:
+    # Filter immediately as you type
+    if query:
         filtered_df = df_tab[
-            df_tab["Series_Title"].str.lower().str.contains(search_input) |
-            df_tab["Genre"].str.lower().str.contains(search_input)
+            df_tab["Series_Title"].str.lower().str.contains(query, na=False) |
+            df_tab["Genre"].str.lower().str.contains(query, na=False)
         ].copy()
+    else:
+        filtered_df = df_tab.copy()
 
-        # Live suggestions
+    # Suggestions area
+    if query:
         suggestions = filtered_df["Series_Title"].head(5).tolist()
         if suggestions:
             st.caption("Suggestions:")
-            sugg_cols = st.columns(len(suggestions))
+            cols = st.columns(len(suggestions))
             for i, title in enumerate(suggestions):
-                if sugg_cols[i].button(title, key=f"sugg_{search_key}_{i}"):
-                    st.session_state[search_key] = title.lower()
-                    st.session_state[f"{search_key}_input"] = title.lower()
+                if cols[i].button(title, key=f"sugg_{search_key}_{i}"):
+                    # Apply suggestion instantly
+                    st.session_state[input_key] = title
                     st.rerun()
         else:
+            # No suggestions for current query -> no cards
             st.warning("No results found")
             return
 
+    # If no rows match, show warning and stop
     if filtered_df.empty:
         st.warning("No results found")
-    else:
-        render_cards(filtered_df, watched_list, username, section,
-                     show_button, reason_map, signup_genres)
+        return
+
+    # Render result cards
+    render_cards(filtered_df, watched_list, username, section,
+                 show_button, reason_map, signup_genres)
 
 # ===== Pages =====
 def login_signup_page():
@@ -177,7 +239,9 @@ def login_signup_page():
         if st.button("Signup") and username and password:
             if signup_user(username):
                 st.session_state.username = username
-                st.session_state.watched, st.session_state.genres, st.session_state.temp_selected_genres = [], [], []
+                st.session_state.watched = []
+                st.session_state.genres = []
+                st.session_state.temp_selected_genres = []
                 st.session_state.page = "genre_select"
                 st.rerun()
             else:
@@ -192,6 +256,7 @@ def login_signup_page():
                 if not st.session_state.genres:
                     st.session_state.temp_selected_genres = []
                 st.session_state.page = "dashboard" if st.session_state.genres else "genre_select"
+                st.session_state._scroll_once = True  # ensure we land at the top
                 st.rerun()
             else:
                 st.error("User not found")
@@ -200,8 +265,7 @@ def genre_selection_page():
     st.title(f"Welcome, {st.session_state.username}!")
     st.subheader("Select Your Favourite Genres")
     all_genres = sorted(set(g for glist in df['Genre'].str.split(', ') for g in glist))
-    if "temp_selected_genres" not in st.session_state:
-        st.session_state.temp_selected_genres = []
+
     st.markdown('<div style="display:flex;flex-wrap:wrap;gap:18px;">', unsafe_allow_html=True)
     for genre in all_genres:
         emoji = genre_emojis.get(genre.lower(), "🎞️")
@@ -213,27 +277,40 @@ def genre_selection_page():
                 st.session_state.temp_selected_genres.append(genre)
             st.rerun()
     st.markdown("</div>", unsafe_allow_html=True)
+
     if st.button("Next ➡️"):
         if st.session_state.temp_selected_genres:
             update_user_genres(st.session_state.username, st.session_state.temp_selected_genres)
             st.session_state.genres = st.session_state.temp_selected_genres.copy()
             st.session_state.page = "dashboard"
-            st.session_state.scroll_to_top = True
+            st.session_state._scroll_once = True  # trigger JS scroll exactly once
             st.rerun()
         else:
             st.error("Please select at least 1 genre")
 
 def dashboard_page():
-    if st.session_state.get("scroll_to_top", False):
-        st.markdown("<script>window.scrollTo({top: 0, behavior: 'smooth'});</script>", unsafe_allow_html=True)
-        st.session_state.scroll_to_top = False
+    # One-time JS scroll to top right after landing here
+    if st.session_state._scroll_once:
+        components.html(
+            """
+            <script>
+              // Scroll the parent page (Streamlit app) to top once
+              try { window.parent.scrollTo({top: 0, behavior: 'auto'}); } catch(e) {}
+            </script>
+            """,
+            height=0, width=0
+        )
+        st.session_state._scroll_once = False
 
     st.sidebar.checkbox("🌙 Dark Mode", key="dark_mode")
     st.write(f"### Welcome, {st.session_state.username}")
 
     if st.button("🚪 Logout"):
-        st.session_state.page, st.session_state.username = "login_signup", ""
-        st.session_state.genres, st.session_state.watched, st.session_state.temp_selected_genres = [], [], []
+        st.session_state.page = "login_signup"
+        st.session_state.username = ""
+        st.session_state.genres = []
+        st.session_state.watched = []
+        st.session_state.temp_selected_genres = []
         st.rerun()
 
     tab1, tab2, tab3 = st.tabs(["⭐ Top Rated", "🎥 Your Watching", "🎯 Recommendations"])
@@ -241,34 +318,43 @@ def dashboard_page():
     with tab1:
         top_movies = df.sort_values(by="IMDB_Rating", ascending=False)
         genre_set = set(g for lst in df['Genre'].str.split(', ') for g in lst)
-        mixed_df = pd.concat([top_movies[top_movies['Genre'].str.contains(g, case=False)].head(3) for g in genre_set]).drop_duplicates("Series_Title")
+        mixed_df = pd.concat(
+            [top_movies[top_movies['Genre'].str.contains(g, case=False, na=False)].head(3) for g in genre_set]
+        ).drop_duplicates("Series_Title")
         mixed_df = mixed_df[~mixed_df['Series_Title'].isin(st.session_state.watched)].head(50)
-        search_and_render(mixed_df, "search_top", st.session_state.watched, st.session_state.username, "top", True, signup_genres=st.session_state.genres)
+        search_and_render(mixed_df, "search_top",
+                          st.session_state.watched, st.session_state.username, "top",
+                          True, signup_genres=st.session_state.genres)
 
     with tab2:
         watched_df = df[df['Series_Title'].isin(st.session_state.watched)]
-        search_and_render(watched_df, "search_watched", st.session_state.watched, st.session_state.username, "your", False, signup_genres=st.session_state.genres)
+        search_and_render(watched_df, "search_watched",
+                          st.session_state.watched, st.session_state.username, "your",
+                          False, signup_genres=st.session_state.genres)
 
     with tab3:
         recs = recommend_for_user(st.session_state.genres, st.session_state.watched, 10)
         reason_map = {}
+        # Build simple reasons text
         for idx, row in recs.iterrows():
             reasons = []
-            watched_reasons = [w for w in st.session_state.watched if w in indices and cosine_sim[indices[w]][idx] > 0.1]
+            watched_reasons = [w for w in st.session_state.watched if w in indices]
             if watched_reasons:
                 reasons.append("You watched " + ", ".join(watched_reasons[:3]))
-            genre_matches = [g for g in st.session_state.genres if g.lower() in row["Genre"].lower()][:3]
+            genre_matches = [g for g in st.session_state.genres if g.lower() in str(row["Genre"]).lower()][:3]
             if genre_matches:
                 reasons.append("You selected genre(s) " + ", ".join(genre_matches))
             reason_map[row['Series_Title']] = " and ".join(reasons) if reasons else None
-        search_and_render(recs, "search_rec", st.session_state.watched, st.session_state.username, "rec", True, reason_map, signup_genres=st.session_state.genres)
+
+        search_and_render(recs, "search_rec",
+                          st.session_state.watched, st.session_state.username, "rec",
+                          True, reason_map, signup_genres=st.session_state.genres)
 
 # ===== Routing =====
-if "page" not in st.session_state: st.session_state.page = "login_signup"
-if "genres" not in st.session_state: st.session_state.genres = []
-if "watched" not in st.session_state: st.session_state.watched = []
-if "temp_selected_genres" not in st.session_state: st.session_state.temp_selected_genres = []
+if st.session_state.page == "login_signup":
+    login_signup_page()
+elif st.session_state.page == "genre_select":
+    genre_selection_page()
+elif st.session_state.page == "dashboard":
+    dashboard_page()
 
-if st.session_state.page == "login_signup": login_signup_page()
-elif st.session_state.page == "genre_select": genre_selection_page()
-elif st.session_state.page == "dashboard": dashboard_page()
