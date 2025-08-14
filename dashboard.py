@@ -93,7 +93,7 @@ def login_signup_page():
                     st.session_state.genres = []
                 if not st.session_state.watched:
                     st.session_state.watched = []
-                st.experimental_rerun()
+                st.rerun()
             else:
                 st.error("Please enter username.")
 
