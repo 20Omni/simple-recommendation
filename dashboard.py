@@ -247,20 +247,43 @@ def dashboard_page():
 
     # Tab 1 - Top Rated
     with tab1:
-        search_query = st.text_input("🔍 Search top movies...", key="top_q").strip().lower()
-        top_movies = df.sort_values(by="IMDB_Rating", ascending=False)
-        mixed_df = pd.concat([top_movies[top_movies['Genre'].str.contains(g, case=False)].head(3)
-                              for g in set(g for lst in df['Genre'].str.split(', ') for g in lst)]
-                             ).drop_duplicates("Series_Title")
-        mixed_df = mixed_df[~mixed_df['Series_Title'].isin(st.session_state.watched)].head(50)
+    st.subheader("Top Rated Movies")
 
-        if search_query:
-            suggestions = mixed_df[mixed_df["Series_Title"].str.lower().str.contains(search_query)]["Series_Title"].head(5).tolist()
-            for s in suggestions:
-                st.markdown(f"- {s}")
-            mixed_df = mixed_df[mixed_df["Series_Title"].str.lower().str.contains(search_query) |
-                                mixed_df["Genre"].str.lower().str.contains(search_query)]
-        render_cards(mixed_df, st.session_state.watched, st.session_state.username, "top", True, signup_genres=st.session_state.genres)
+    # keep search value in session state so we can programmatically update
+    search_key = "search_top_q"
+    if search_key not in st.session_state:
+        st.session_state[search_key] = ""
+
+    # search input box
+    query = st.text_input("🔍 Search top movies...", value=st.session_state[search_key], key=search_key).strip().lower()
+
+    # dataset for this tab
+    top_movies = df.sort_values(by="IMDB_Rating", ascending=False)
+    mixed_df = pd.concat([
+        top_movies[top_movies['Genre'].str.contains(g, case=False)].head(3)
+        for g in set(g for lst in df['Genre'].str.split(', ') for g in lst)
+    ]).drop_duplicates("Series_Title")
+    mixed_df = mixed_df[~mixed_df['Series_Title'].isin(st.session_state.watched)].head(50)
+
+    # suggestions + live filtering
+    filtered_df = mixed_df
+    if query:
+        filtered_df = mixed_df[
+            mixed_df["Series_Title"].str.lower().str.contains(query) |
+            mixed_df["Genre"].str.lower().str.contains(query)
+        ]
+        # clickable dropdown suggestions box
+        suggestions = filtered_df["Series_Title"].head(5).tolist()
+        if suggestions:
+            st.markdown("<div style='border:1px solid #ccc;border-radius:5px;margin-top:-10px;margin-bottom:10px;background:white;'>", unsafe_allow_html=True)
+            for i, s in enumerate(suggestions):
+                if st.button(s, key=f"{search_key}_sugg_{i}"):
+                    st.session_state[search_key] = s
+                    st.rerun()
+            st.markdown("</div>", unsafe_allow_html=True)
+
+    render_cards(filtered_df, st.session_state.watched, st.session_state.username, "top", True, signup_genres=st.session_state.genres)
+
 
     # Tab 2 - Watching
     with tab2:
