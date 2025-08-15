@@ -285,7 +285,7 @@ def dashboard_page():
         search_and_render(mixed_df, "top", st.session_state.watched, st.session_state.username, True, signup_genres=st.session_state.genres)
 
     with tab2:
-    watched_df = df[df['Series_Title'].isin(st.session_state.watched)]
+         watched_df = df[df['Series_Title'].isin(st.session_state.watched)]
     if watched_df.empty:
         st.info("You haven’t watched anything yet!")
     else:
