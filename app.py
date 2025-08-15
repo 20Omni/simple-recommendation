@@ -129,19 +129,19 @@ def movie_card(row, watched_list, username, section, reason=None, show_button=Tr
     border_color = "#3d434d" if dark else "#e2e3e6"
     genre_color = "#b2b2b2" if dark else "#5A5A5A"
     rating_color = "#fcb900"
-    
+
     emoji, genre_text = get_dominant_genre_with_emoji(row["Genre"], signup_genres)
-    
+
     cert_value = row["Certificate"] if pd.notna(row["Certificate"]) and str(row["Certificate"]).strip() else "UA"
     cert_value = cert_value.strip()
-    
+
     cert_colors = {
         "U": "#27ae60",
         "UA": "#f39c12",
         "A": "#c0392b"
     }
     cert_color = cert_colors.get(cert_value.upper(), "#7f8c8d")
-    
+
     html = f'''
     <div class="movie-card" style="border:1.5px solid {border_color};
       border-radius:10px;padding:12px;
@@ -149,14 +149,12 @@ def movie_card(row, watched_list, username, section, reason=None, show_button=Tr
       box-shadow:0 2px 6px rgba(0,0,0,0.08);
       height: 180px; display: flex; flex-direction: column; justify-content: space-between;">
         
-        <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
-            <div style="font-weight:700;font-size:1.1rem;line-height:1.3;flex:1;">
-                {row["Series_Title"]} ({row["Released_Year"]})
-            </div>
+        <div style="font-weight:700;font-size:1.1rem;line-height:1.3;">
+            {row["Series_Title"]} ({row["Released_Year"]})
             <div style="background:{cert_color};color:white;
                         padding:2px 6px;border-radius:6px;
                         font-size:0.75rem;font-weight:bold;
-                        min-width:32px;text-align:center; white-space:nowrap;">
+                        display:inline-block;margin-top:4px;">
                 {cert_value}
             </div>
         </div>
