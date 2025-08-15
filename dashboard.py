@@ -286,7 +286,7 @@ def dashboard_page():
         st.rerun()
 
     # Styled welcome text
-   st.markdown(
+    st.markdown(
     f"""
     <div style="
         font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
