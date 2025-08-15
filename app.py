@@ -108,8 +108,9 @@ st.markdown("""
     display: flex;
     flex-direction: column;
     justify-content: flex-start;
-    padding-bottom: 50px; /* space for watched button */
+    padding-bottom: 32px; /* extra space for the button */
     position: relative;
+    margin-bottom: 20px;
 }
 .movie-card:hover {
     transform: scale(1.05);
@@ -117,17 +118,10 @@ st.markdown("""
     position: relative;
     z-index: 10;
 }
-.card-btn-box {
-    position: absolute;
-    bottom: 12px;
-    width: 100%;
-    display: flex;
-    justify-content: center;
-}
 </style>
 """, unsafe_allow_html=True)
 
-# ===== Card Renderer =====
+# ===== Card Renderer with Watched button below card =====
 def movie_card(row, watched_list, username, section, reason=None, show_button=True, signup_genres=None):
     dark = st.session_state.get('dark_mode', False)
     bg_color = "#23272e" if dark else "#fdfdfe"
@@ -137,16 +131,22 @@ def movie_card(row, watched_list, username, section, reason=None, show_button=Tr
     rating_color = "#fcb900"
     emoji, genre_text = get_dominant_genre_with_emoji(row["Genre"], signup_genres)
     html = f'''
-    <div class="movie-card" style="border:1.5px solid {border_color};border-radius:10px;padding:12px;
-    margin-bottom:16px;background:{bg_color};color:{text_color};
-    box-shadow:0 2px 6px rgba(0,0,0,0.08);">
+    <div class="movie-card" style="border:1.5px solid {border_color};
+      border-radius:10px;padding:12px;
+      background:{bg_color};color:{text_color};
+      box-shadow:0 2px 6px rgba(0,0,0,0.08);">
         <div style="font-weight:700;font-size:1.1rem;">{row["Series_Title"]}</div>
-        <div style="color:{genre_color};margin-bottom:5px;">{emoji} <span style="font-style: italic;">{genre_text}</span></div>
-        <div style="color:{rating_color};margin-bottom:8px;">⭐ {row["IMDB_Rating"]:.1f}/10</div>
+        <div style="color:{genre_color};margin-bottom:5px;">
+            {emoji} <span style="font-style: italic;">{genre_text}</span>
+        </div>
+        <div style="color:{rating_color};margin-bottom:8px;">
+            ⭐ {row["IMDB_Rating"]:.1f}/10
+        </div>
         {f'<div style="color:#399ed7;margin-bottom:8px;">💡 {reason}</div>' if reason else ""}
-        <div class="card-btn-box">
+    </div>
     '''
     st.markdown(html, unsafe_allow_html=True)
+
     if show_button:
         key = f"watched_{section}_{row.name}"
         if row['Series_Title'] not in watched_list:
@@ -156,9 +156,8 @@ def movie_card(row, watched_list, username, section, reason=None, show_button=Tr
                 st.rerun()
         else:
             st.button("✅ Watched", key=key, disabled=True)
-    st.markdown("</div></div>", unsafe_allow_html=True)
 
-# ===== Render Grid =====
+# ===== Render Cards Grid =====
 def render_cards(dataframe, watched_list, username, section, show_button=True, reason_map=None, signup_genres=None):
     cols_per_row = 3
     for r in range(ceil(len(dataframe) / cols_per_row)):
