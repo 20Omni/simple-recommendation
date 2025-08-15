@@ -77,7 +77,7 @@ def recommend_for_user(preferred_genres, watched_titles, top_n=10):
     rec_df = df.iloc[np.argsort(scores)[::-1]]
     rec_df = rec_df[~rec_df['Series_Title'].isin(watched_titles)]
     signup_df = rec_df[rec_df['Genre'].str.contains('|'.join(preferred_genres), case=False)]
-    return pd.concat([signup_df.head(3), rec_df]).drop_duplicates().head(top_n)[['Series_Title','Genre','IMDB_Rating']]
+    return pd.concat([signup_df.head(3), rec_df]).drop_duplicates().head(top_n)[['Series_Title','Genre','IMDB_Rating','Certificate','Released_Year']]
 
 # ===== Emoji Mapping =====
 genre_emojis = {
@@ -104,11 +104,11 @@ st.markdown("""
 .movie-card {
     transition: transform 0.2s ease, box-shadow 0.2s ease;
     cursor: pointer;
-    min-height: 220px;  /* ensures uniform height */
+    min-height: 240px;
     display: flex;
     flex-direction: column;
     justify-content: flex-start;
-    padding-bottom: 32px; /* extra space for the button */
+    padding-bottom: 32px;
     position: relative;
     margin-bottom: 20px;
 }
@@ -121,7 +121,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ===== Card Renderer with Watched button below card =====
+# ===== Card Renderer with new Certificate + Released Year =====
 def movie_card(row, watched_list, username, section, reason=None, show_button=True, signup_genres=None):
     dark = st.session_state.get('dark_mode', False)
     bg_color = "#23272e" if dark else "#fdfdfe"
@@ -135,9 +135,12 @@ def movie_card(row, watched_list, username, section, reason=None, show_button=Tr
       border-radius:10px;padding:12px;
       background:{bg_color};color:{text_color};
       box-shadow:0 2px 6px rgba(0,0,0,0.08);">
-        <div style="font-weight:700;font-size:1.1rem;">{row["Series_Title"]}</div>
+        <div style="font-weight:700;font-size:1.1rem;">{row["Series_Title"]} ({row["Released_Year"]})</div>
         <div style="color:{genre_color};margin-bottom:5px;">
             {emoji} <span style="font-style: italic;">{genre_text}</span>
+        </div>
+        <div style="margin-bottom:5px;">
+            🎫 Certificate: {row["Certificate"]}
         </div>
         <div style="color:{rating_color};margin-bottom:8px;">
             ⭐ {row["IMDB_Rating"]:.1f}/10
@@ -263,7 +266,6 @@ def dashboard_page():
     if st.session_state.get("scroll_to_top", False):
         st.markdown("<script>window.scrollTo({top: 0, behavior: 'instant'});</script>", unsafe_allow_html=True)
         st.session_state.scroll_to_top = False
-    # Sidebar buttons: Dark Mode and Logout as buttons to keep consistent style
     if st.sidebar.button("🌙 Dark Mode"):
         st.session_state.dark_mode = not st.session_state.dark_mode
     if st.sidebar.button("🚪 Logout"):
@@ -273,8 +275,7 @@ def dashboard_page():
         st.session_state.watched = []
         st.session_state.temp_selected_genres = []
         st.rerun()
-    st.markdown(
-    f"""
+    st.markdown(f"""
     <div style="
         font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
         font-size: 36px;
@@ -286,9 +287,8 @@ def dashboard_page():
     ">
         Welcome, {st.session_state.username}!
     </div>
-    """,
-    unsafe_allow_html=True
-    )
+    """, unsafe_allow_html=True)
+
     tab1, tab2, tab3 = st.tabs(["⭐ Top Rated", "🎥 Your Watching", "🎯 Recommendations"])
     with tab1:
         top_movies = df.sort_values(by="IMDB_Rating", ascending=False)
@@ -301,6 +301,7 @@ def dashboard_page():
         if selected_title:
             mixed_df = mixed_df[mixed_df['Series_Title'] == selected_title]
         render_cards(mixed_df, st.session_state.watched, st.session_state.username, "top", True, signup_genres=st.session_state.genres)
+
     with tab2:
         watched_df = df[df['Series_Title'].isin(st.session_state.watched)]
         if watched_df.empty:
@@ -310,6 +311,7 @@ def dashboard_page():
             if selected_title:
                 watched_df = watched_df[watched_df['Series_Title'] == selected_title]
             render_cards(watched_df, st.session_state.watched, st.session_state.username, "your", False, signup_genres=st.session_state.genres)
+
     with tab3:
         recs = recommend_for_user(st.session_state.genres, st.session_state.watched, 10)
         reason_map = {}
