@@ -26,7 +26,8 @@ def signup_user(username):
     save_user_data(data)
     return True
 
-def load_user(username): return load_user_data().get(username)
+def load_user(username):
+    return load_user_data().get(username)
 
 def update_user_genres(username, genres):
     data = load_user_data()
@@ -84,6 +85,7 @@ genre_emojis = {
     "sci-fi":"👽","science fiction":"👽","adventure":"🧭","fantasy":"🦄","animation":"🐭",
     "documentary":"🎥","crime":"🕵️","mystery":"🕵️","war":"⚔️","musical":"🎶","music":"🎶"
 }
+
 def get_dominant_genre_with_emoji(genre_string, signup_genres=None):
     genres_list = [g.strip() for g in genre_string.split(",")]
     if signup_genres:
@@ -96,22 +98,31 @@ def get_dominant_genre_with_emoji(genre_string, signup_genres=None):
             return genre_emojis[g.lower()], genre_string
     return "🎞️", genre_string
 
-# Inject hover effect CSS once including fixed min-height for uniform card heights
+# ===== Inject CSS for hover effect & uniform card height =====
 st.markdown("""
 <style>
 .movie-card {
     transition: transform 0.2s ease, box-shadow 0.2s ease;
     cursor: pointer;
-    min-height: 180px;  /* Ensure all cards have equal minimum height */
+    min-height: 220px;  /* ensures uniform height */
     display: flex;
     flex-direction: column;
     justify-content: flex-start;
+    padding-bottom: 50px; /* space for watched button */
+    position: relative;
 }
 .movie-card:hover {
     transform: scale(1.05);
     box-shadow: 0 8px 20px rgba(0,0,0,0.3);
     position: relative;
     z-index: 10;
+}
+.card-btn-box {
+    position: absolute;
+    bottom: 12px;
+    width: 100%;
+    display: flex;
+    justify-content: center;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -133,31 +144,11 @@ def movie_card(row, watched_list, username, section, reason=None, show_button=Tr
         <div style="color:{genre_color};margin-bottom:5px;">{emoji} <span style="font-style: italic;">{genre_text}</span></div>
         <div style="color:{rating_color};margin-bottom:8px;">⭐ {row["IMDB_Rating"]:.1f}/10</div>
         {f'<div style="color:#399ed7;margin-bottom:8px;">💡 {reason}</div>' if reason else ""}
-    </div>
+        <div class="card-btn-box">
     '''
     st.markdown(html, unsafe_allow_html=True)
     if show_button:
         key = f"watched_{section}_{row.name}"
-        st.markdown("""
-            <style>
-            .watched-btn {
-                background-color: #4CAF50; 
-                color: white; 
-                padding: 6px 14px; 
-                font-size: 14px; 
-                border: none; 
-                border-radius: 6px; 
-                cursor: pointer;
-            }
-            .watched-btn:hover {
-                background-color: #45a049;
-            }
-            .watched-btn:disabled {
-                background-color: #888;
-                cursor: default;
-            }
-            </style>
-        """, unsafe_allow_html=True)
         if row['Series_Title'] not in watched_list:
             if st.button("✅ Watched", key=key, help="Mark this as watched"):
                 watched_list.append(row['Series_Title'])
@@ -165,24 +156,7 @@ def movie_card(row, watched_list, username, section, reason=None, show_button=Tr
                 st.rerun()
         else:
             st.button("✅ Watched", key=key, disabled=True)
-
-# ===== Render Grid =====
-def render_cards(dataframe, watched_list, username, section, show_button=True, reason_map=None, signup_genres=None):
-    cols_per_row = 3
-    for r in range(ceil(len(dataframe) / cols_per_row)):
-        cols = st.columns(cols_per_row)
-        for c in range(cols_per_row):
-            idx = r*cols_per_row + c
-            if idx < len(dataframe):
-                row = dataframe.iloc[idx]
-                reason = reason_map.get(row['Series_Title']) if reason_map else None
-                with cols[c]:
-                    movie_card(row, watched_list, username, section, reason, show_button, signup_genres)
-
-# The rest of your code (login_signup_page, genre_selection_page, search functions, dashboard_page) remains the same as you have it.
-# Just replace your previous CSS injection code with the above CSS block to fix the box size issue with the hover effect applied.
-
-
+    st.markdown("</div></div>", unsafe_allow_html=True)
 
 # ===== Render Grid =====
 def render_cards(dataframe, watched_list, username, section, show_button=True, reason_map=None, signup_genres=None):
@@ -290,7 +264,6 @@ def dashboard_page():
     if st.session_state.get("scroll_to_top", False):
         st.markdown("<script>window.scrollTo({top: 0, behavior: 'instant'});</script>", unsafe_allow_html=True)
         st.session_state.scroll_to_top = False
-
     # Sidebar buttons: Dark Mode and Logout as buttons to keep consistent style
     if st.sidebar.button("🌙 Dark Mode"):
         st.session_state.dark_mode = not st.session_state.dark_mode
@@ -301,7 +274,6 @@ def dashboard_page():
         st.session_state.watched = []
         st.session_state.temp_selected_genres = []
         st.rerun()
-
     st.markdown(
     f"""
     <div style="
@@ -318,9 +290,7 @@ def dashboard_page():
     """,
     unsafe_allow_html=True
     )
-
     tab1, tab2, tab3 = st.tabs(["⭐ Top Rated", "🎥 Your Watching", "🎯 Recommendations"])
-
     with tab1:
         top_movies = df.sort_values(by="IMDB_Rating", ascending=False)
         mixed_df = pd.concat([
@@ -328,12 +298,10 @@ def dashboard_page():
             for g in set(g for lst in df['Genre'].str.split(', ') for g in lst)
         ]).drop_duplicates("Series_Title")
         mixed_df = mixed_df[~mixed_df['Series_Title'].isin(st.session_state.watched)].head(50)
-
         selected_title = st_searchbox(search_top_movies, placeholder="Search top movies...", key="top_searchbox")
         if selected_title:
             mixed_df = mixed_df[mixed_df['Series_Title'] == selected_title]
         render_cards(mixed_df, st.session_state.watched, st.session_state.username, "top", True, signup_genres=st.session_state.genres)
-
     with tab2:
         watched_df = df[df['Series_Title'].isin(st.session_state.watched)]
         if watched_df.empty:
@@ -343,7 +311,6 @@ def dashboard_page():
             if selected_title:
                 watched_df = watched_df[watched_df['Series_Title'] == selected_title]
             render_cards(watched_df, st.session_state.watched, st.session_state.username, "your", False, signup_genres=st.session_state.genres)
-
     with tab3:
         recs = recommend_for_user(st.session_state.genres, st.session_state.watched, 10)
         reason_map = {}
@@ -359,19 +326,24 @@ def dashboard_page():
             if genre_matches:
                 reasons.append("You selected genre(s) " + ", ".join(genre_matches))
             reason_map[row['Series_Title']] = " and ".join(reasons) if reasons else None
-
         selected_title = st_searchbox(search_recommended_movies, placeholder="Search recommended movies...", key="rec_searchbox")
         if selected_title:
             recs = recs[recs['Series_Title'] == selected_title]
         render_cards(recs, st.session_state.watched, st.session_state.username, "rec", True, reason_map, signup_genres=st.session_state.genres)
 
-
 # ===== Routing =====
-if "page" not in st.session_state: st.session_state.page = "login_signup"
-if "genres" not in st.session_state: st.session_state.genres = []
-if "watched" not in st.session_state: st.session_state.watched = []
-if "temp_selected_genres" not in st.session_state: st.session_state.temp_selected_genres = []
+if "page" not in st.session_state:
+    st.session_state.page = "login_signup"
+if "genres" not in st.session_state:
+    st.session_state.genres = []
+if "watched" not in st.session_state:
+    st.session_state.watched = []
+if "temp_selected_genres" not in st.session_state:
+    st.session_state.temp_selected_genres = []
 
-if st.session_state.page == "login_signup": login_signup_page()
-elif st.session_state.page == "genre_select": genre_selection_page()
-elif st.session_state.page == "dashboard": dashboard_page()
+if st.session_state.page == "login_signup":
+    login_signup_page()
+elif st.session_state.page == "genre_select":
+    genre_selection_page()
+elif st.session_state.page == "dashboard":
+    dashboard_page()
