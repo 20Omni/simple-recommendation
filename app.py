@@ -105,14 +105,12 @@ st.markdown("""
     transition: transform 0.2s ease, box-shadow 0.2s ease;
     cursor: pointer;
     min-height: 240px;
-    max-height: 320px;
     display: flex;
     flex-direction: column;
     justify-content: flex-start;
     padding-bottom: 32px;
     position: relative;
     margin-bottom: 20px;
-    overflow: hidden;
 }
 .movie-card:hover {
     transform: scale(1.05);
@@ -120,15 +118,10 @@ st.markdown("""
     position: relative;
     z-index: 10;
 }
-.reason-section {
-    max-height: 38px;
-    overflow-y: auto;
-    word-break: break-word;
-}
 </style>
 """, unsafe_allow_html=True)
 
-# ===== Card Renderer with Certificate on next line, reason wrapped =====
+# ===== Card Renderer with Fix =====
 def movie_card(row, watched_list, username, section, reason=None, show_button=True, signup_genres=None):
     dark = st.session_state.get('dark_mode', False)
     bg_color = "#23272e" if dark else "#fdfdfe"
@@ -136,40 +129,41 @@ def movie_card(row, watched_list, username, section, reason=None, show_button=Tr
     border_color = "#3d434d" if dark else "#e2e3e6"
     genre_color = "#b2b2b2" if dark else "#5A5A5A"
     rating_color = "#fcb900"
-
-    # Genre
+    
     emoji, genre_text = get_dominant_genre_with_emoji(row["Genre"], signup_genres)
-    # Certificate
+    
     cert_value = row["Certificate"] if pd.notna(row["Certificate"]) and str(row["Certificate"]).strip() else "UA"
     cert_value = cert_value.strip()
-    cert_colors = {"U": "#27ae60", "UA": "#f39c12", "A": "#c0392b", "R": "#7f8c8d"}
+    cert_colors = {"U": "#27ae60", "UA": "#f39c12", "A": "#c0392b"}
     cert_color = cert_colors.get(cert_value.upper(), "#7f8c8d")
 
     html = textwrap.dedent(f"""<div class="movie-card" style="border:1.5px solid {border_color};
-    border-radius:10px;padding:12px;background:{bg_color};color:{text_color};
-    box-shadow:0 2px 6px rgba(0,0,0,0.08);height:180px;display:flex;flex-direction:column;justify-content:space-between;">
+border-radius:10px;padding:12px;background:{bg_color};color:{text_color};
+box-shadow:0 2px 6px rgba(0,0,0,0.08);min-height:180px;height:auto;
+display:flex;flex-direction:column;justify-content:space-between;
+overflow-wrap:break-word;word-break:break-word;white-space:normal;">
 
-    <div>
-      <div style="font-weight:700;font-size:1.1rem;line-height:1.3;">
-        {row["Series_Title"]} ({row["Released_Year"]})
-      </div>
-      <div style="display:inline-block;background:{cert_color};color:#fff;padding:4px 10px;border-radius:6px;
-                  font-size:0.85rem;font-weight:bold;min-width:38px;text-align:center;margin-top:6px;">
-        {cert_value}
-      </div>
-    </div>
+<div>
+  <div style="font-weight:700;font-size:1.1rem;line-height:1.3;">
+    {row["Series_Title"]} ({row["Released_Year"]})
+  </div>
+  <div style="display:inline-block;background:{cert_color};color:#fff;padding:4px 10px;border-radius:6px;
+              font-size:0.85rem;font-weight:bold;min-width:38px;text-align:center;margin-top:6px;">
+    {cert_value}
+  </div>
+</div>
 
-    <div>
-      <div style="color:{genre_color};margin-top:6px;">
-        {emoji} <span style="font-style: italic;">{genre_text}</span>
-      </div>
-      <div style="color:{rating_color};margin-top:6px;">
-        ⭐ {row["IMDB_Rating"]:.1f}/10
-      </div>
-      {'<div class="reason-section" style="color:#399ed7;margin-top:6px;">💡 ' + reason + '</div>' if reason else ''}
-    </div>
+<div>
+  <div style="color:{genre_color};margin-top:6px;">
+    {emoji} <span style="font-style: italic;">{genre_text}</span>
+  </div>
+  <div style="color:{rating_color};margin-top:6px;">
+    ⭐ {row["IMDB_Rating"]:.1f}/10
+  </div>
+  {f'<div style="color:#399ed7;margin-top:6px;overflow-wrap:break-word;word-break:break-word;white-space:normal;">💡 {reason}</div>' if reason else ''}
+</div>
 
-    </div>""")
+</div>""")
 
     st.markdown(html, unsafe_allow_html=True)
 
@@ -195,9 +189,6 @@ def render_cards(dataframe, watched_list, username, section, show_button=True, r
                 reason = reason_map.get(row['Series_Title']) if reason_map else None
                 with cols[c]:
                     movie_card(row, watched_list, username, section, reason, show_button, signup_genres)
-
-# ... rest of your app code unchanged (login/signup, genre selection, search functions, dashboard_page, routing) ...
-
 
 # ===== Login/Signup Page =====
 def login_signup_page():
