@@ -223,7 +223,11 @@ overflow-wrap:break-word;word-break:break-word;white-space:normal;">
     with st.expander("🔎 View details", expanded=False):
         # Keep it simple + clean; no images so layout stays compact
         st.markdown(f"**Overview:** {overview}")
-        st.markdown(f"**Runtime:** {runtime}")
+        runtime_str = str(runtime).strip()
+        if runtime_str.lower() != "n/a":
+            if "min" not in runtime_str:
+                runtime_str = runtime_str + " min"
+        st.write("**Runtime:**", runtime_str)
         if stars:
             st.markdown("**Stars:**")
             for s in stars:
