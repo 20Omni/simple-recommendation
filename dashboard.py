@@ -257,6 +257,28 @@ def search_and_render(df_tab, section, watched_list, username, show_button=True,
     else:
         render_cards(filtered_df, watched_list, username, section, show_button, reason_map, signup_genres)
 
+def search_top_movies(searchterm: str):
+    if not searchterm:
+        return df.sort_values(by="IMDB_Rating", ascending=False)["Series_Title"].head(10).tolist()
+    results = df[df["Series_Title"].str.lower().str.contains(searchterm.lower()) | 
+                 df["Genre"].str.lower().str.contains(searchterm.lower())]
+    return results["Series_Title"].head(10).tolist()
+
+def search_watched_movies(searchterm: str):
+    watched_df = df[df['Series_Title'].isin(st.session_state.watched)]
+    if not searchterm:
+        return watched_df["Series_Title"].tolist()
+    results = watched_df[watched_df["Series_Title"].str.lower().str.contains(searchterm.lower()) | 
+                         watched_df["Genre"].str.lower().str.contains(searchterm.lower())]
+    return results["Series_Title"].head(10).tolist()
+
+def search_recommended_movies(searchterm: str):
+    recs = recommend_for_user(st.session_state.genres, st.session_state.watched, 10)
+    if not searchterm:
+        return recs["Series_Title"].tolist()
+    results = recs[recs["Series_Title"].str.lower().str.contains(searchterm.lower()) | 
+                   recs["Genre"].str.lower().str.contains(searchterm.lower())]
+    return results["Series_Title"].head(10).tolist()
 
 # ===== Dashboard Page =====
 def dashboard_page():
