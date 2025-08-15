@@ -278,12 +278,23 @@ def dashboard_page():
         st.session_state.scroll_to_top = False
 
     st.sidebar.checkbox("🌙 Dark Mode", key="dark_mode")
-    st.write(f"### Welcome, {st.session_state.username}")
-    if st.button("🚪 Logout"):
+
+    # Move logout button to sidebar
+    if st.sidebar.button("🚪 Logout"):
         st.session_state.page, st.session_state.username = "login_signup", ""
         st.session_state.genres, st.session_state.watched, st.session_state.temp_selected_genres = [], [], []
         st.rerun()
 
+    # Styled welcome text
+    st.markdown(
+        f"""
+        <h2 style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                   color: #333333; margin-bottom: 20px;">
+            Welcome, <span style="color:#1f77b4;">{st.session_state.username}</span>
+        </h2>
+        """,
+        unsafe_allow_html=True
+    )
     tab1, tab2, tab3 = st.tabs(["⭐ Top Rated", "🎥 Your Watching", "🎯 Recommendations"])
 
     with tab1:
