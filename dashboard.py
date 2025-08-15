@@ -162,25 +162,36 @@ def search_and_render(df_tab, search_key, watched_list, username, section, show_
 def login_signup_page():
     st.title("Movie Recommender – Login / Signup")
     opt = st.radio("Select option", ["Login", "Signup"], horizontal=True)
-    username = st.text_input("Username"); password = st.text_input("Password", type="password")
+    
+    username = st.text_input("Username")
+    password = st.text_input("Password", type="password")
+
     if opt == "Signup":
         if st.button("Signup") and username and password:
-            if signup_user(username):
-                st.session_state.username = username
-                st.session_state.watched, st.session_state.genres, st.session_state.temp_selected_genres = [], [], []
-                st.session_state.page = "genre_select"; st.rerun()
-            else: st.error("Username exists")
-    else:
+            if len(password) < 5:
+                st.error("Password must be at least 5 characters long.")
+            else:
+                if signup_user(username):
+                    st.session_state.username = username
+                    st.session_state.watched, st.session_state.genres, st.session_state.temp_selected_genres = [], [], []
+                    st.session_state.page = "genre_select"
+                    st.rerun()
+                else:
+                    st.error("Username already exists")
+    else:  # Login
         if st.button("Login") and username and password:
             user = load_user(username)
             if user:
                 st.session_state.username = username
                 st.session_state.watched = user.get("watched", [])
                 st.session_state.genres = user.get("genres", [])
-                if not st.session_state.genres: st.session_state.temp_selected_genres = []
+                if not st.session_state.genres:
+                    st.session_state.temp_selected_genres = []
                 st.session_state.page = "dashboard" if st.session_state.genres else "genre_select"
                 st.rerun()
-            else: st.error("User not found")
+            else:
+                st.error("User not found")
+
 
 # ===== Genre Selection with small square boxes =====
 def genre_selection_page():
@@ -188,26 +199,24 @@ def genre_selection_page():
     st.subheader("Select Your Favourite Genres")
 
     all_genres = sorted(set(g for glist in df['Genre'].str.split(', ') for g in glist))
-
     if "temp_selected_genres" not in st.session_state:
         st.session_state.temp_selected_genres = []
 
-    # Simple inline style toggle buttons
     st.write("Click to select / deselect genres:")
 
-    for genre in all_genres:
+    cols_per_row = 4  # Number of buttons per row
+    cols = st.columns(cols_per_row)
+    for idx, genre in enumerate(all_genres):
         emoji = genre_emojis.get(genre.lower(), "🎞️")
         selected = genre in st.session_state.temp_selected_genres
+        btn_label = f"✅ {emoji} {genre}" if selected else f"{emoji} {genre}"
 
-        if selected:
-            btn_label = f"✅ {emoji} {genre}"
+        with cols[idx % cols_per_row]:
             if st.button(btn_label, key=f"genre_{genre}"):
-                st.session_state.temp_selected_genres.remove(genre)
-                st.rerun()
-        else:
-            btn_label = f"{emoji} {genre}"
-            if st.button(btn_label, key=f"genre_{genre}"):
-                st.session_state.temp_selected_genres.append(genre)
+                if selected:
+                    st.session_state.temp_selected_genres.remove(genre)
+                else:
+                    st.session_state.temp_selected_genres.append(genre)
                 st.rerun()
 
     # Continue button
