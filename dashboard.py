@@ -260,7 +260,7 @@ def search_and_render(df_tab, section, watched_list, username, show_button=True,
 
 # ===== Dashboard Page =====
 def dashboard_page():
-    def dashboard_page():
+    
     if st.session_state.get("scroll_to_top", False):
         st.markdown("<script>window.scrollTo({top: 0, behavior: 'instant'});</script>", unsafe_allow_html=True)
         st.session_state.scroll_to_top = False
