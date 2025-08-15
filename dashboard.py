@@ -286,13 +286,13 @@ def dashboard_page():
         st.rerun()
 
     # Styled welcome text
-    st.markdown(
+   st.markdown(
     f"""
     <div style="
         font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
         font-size: 36px;
         font-weight: 600;
-        color: #2c3e50;
+        color: #e74c3c;  /* Stylish red */
         margin-bottom: 25px;
         padding-top: 15px;
         letter-spacing: 1px;
@@ -302,6 +302,7 @@ def dashboard_page():
     """,
     unsafe_allow_html=True
 )
+
 
     tab1, tab2, tab3 = st.tabs(["⭐ Top Rated", "🎥 Your Watching", "🎯 Recommendations"])
 
