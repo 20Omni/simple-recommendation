@@ -260,6 +260,7 @@ def search_and_render(df_tab, section, watched_list, username, show_button=True,
 
 # ===== Dashboard Page =====
 def dashboard_page():
+    def dashboard_page():
     if st.session_state.get("scroll_to_top", False):
         st.markdown("<script>window.scrollTo({top: 0, behavior: 'instant'});</script>", unsafe_allow_html=True)
         st.session_state.scroll_to_top = False
@@ -275,28 +276,35 @@ def dashboard_page():
 
     with tab1:
         top_movies = df.sort_values(by="IMDB_Rating", ascending=False)
-        mixed_df = pd.concat([top_movies[top_movies['Genre'].str.contains(g, case=False)].head(3)
-                              for g in set(g for lst in df['Genre'].str.split(', ') for g in lst)]
-                             ).drop_duplicates("Series_Title")
+        mixed_df = pd.concat([
+            top_movies[top_movies['Genre'].str.contains(g, case=False)].head(3)
+            for g in set(g for lst in df['Genre'].str.split(', ') for g in lst)
+        ]).drop_duplicates("Series_Title")
         mixed_df = mixed_df[~mixed_df['Series_Title'].isin(st.session_state.watched)].head(50)
-         search_and_render(mixed_df, "top", st.session_state.watched, st.session_state.username, True, signup_genres=st.session_state.genres)
+
+        search_and_render(mixed_df, "top", st.session_state.watched, st.session_state.username, True, signup_genres=st.session_state.genres)
+
     with tab2:
         watched_df = df[df['Series_Title'].isin(st.session_state.watched)]
         search_and_render(watched_df, "your", st.session_state.watched, st.session_state.username, False, signup_genres=st.session_state.genres)
-    with tab3:
-    recs = recommend_for_user(st.session_state.genres, st.session_state.watched, 10)
-    reason_map = {}
-    for idx, row in recs.iterrows():
-        reasons = []
-        watched_reasons = [w for w in st.session_state.watched if w in indices and cosine_sim[indices[w]][idx] > 0.1]
-        if watched_reasons:
-            reasons.append("You watched " + ", ".join(watched_reasons[:3]))
-        genre_matches = [g for g in st.session_state.genres if g.lower() in row["Genre"].lower()][:3]
-        if genre_matches:
-            reasons.append("You selected genre(s) " + ", ".join(genre_matches))
-        reason_map[row['Series_Title']] = " and ".join(reasons) if reasons else None
 
-    search_and_render(recs, "rec", st.session_state.watched, st.session_state.username, True, reason_map, signup_genres=st.session_state.genres)
+    with tab3:
+        recs = recommend_for_user(st.session_state.genres, st.session_state.watched, 10)
+        reason_map = {}
+        for idx, row in recs.iterrows():
+            reasons = []
+            watched_reasons = [
+                w for w in st.session_state.watched
+                if w in indices and cosine_sim[indices[w]][idx] > 0.1
+            ]
+            if watched_reasons:
+                reasons.append("You watched " + ", ".join(watched_reasons[:3]))
+            genre_matches = [g for g in st.session_state.genres if g.lower() in row["Genre"].lower()][:3]
+            if genre_matches:
+                reasons.append("You selected genre(s) " + ", ".join(genre_matches))
+            reason_map[row['Series_Title']] = " and ".join(reasons) if reasons else None
+
+        search_and_render(recs, "rec", st.session_state.watched, st.session_state.username, True, reason_map, signup_genres=st.session_state.genres)
 
 # ===== Routing =====
 if "page" not in st.session_state: st.session_state.page = "login_signup"
