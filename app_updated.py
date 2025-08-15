@@ -329,7 +329,7 @@ def dashboard_page():
                 watched_df = watched_df[watched_df['Series_Title'] == selected_title]
             render_cards(watched_df, st.session_state.watched, st.session_state.username, "your", False, signup_genres=st.session_state.genres)
 
-        with tab3:
+    with tab3:
         recs = recommend_for_user(st.session_state.genres, st.session_state.watched, 10)
         reason_map = {}
         for idx, row in recs.iterrows():
