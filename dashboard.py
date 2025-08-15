@@ -289,14 +289,15 @@ def dashboard_page():
     st.markdown(
     f"""
     <div style="
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        font-size: 32px;
-        font-weight: 700;
-        color: #1a73e8;
-        margin-bottom: 30px;
+        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        font-size: 36px;
+        font-weight: 600;
+        color: #2c3e50;
+        margin-bottom: 25px;
         padding-top: 15px;
+        letter-spacing: 1px;
     ">
-        Welcome, <span style="color: #0b47a1;">{st.session_state.username}</span>!
+        Welcome, {st.session_state.username}!
     </div>
     """,
     unsafe_allow_html=True
