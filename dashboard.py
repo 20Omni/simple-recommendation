@@ -229,7 +229,35 @@ def genre_selection_page():
         else:
             st.error("Please select at least one genre to continue.")
 
-# ===== Dashboard with Live Filtering + Suggestions =====
+# ===== Live Search + Clickable Suggestions UTC =====
+def live_search_tab(tab_df, search_key, watched_list, username, section, reason_map=None, signup_genres=None, show_button=True):
+    if search_key not in st.session_state:
+        st.session_state[search_key] = ""
+
+    query = st.text_input("🔍 Search...", value=st.session_state[search_key], key=f"{search_key}_input").strip().lower()
+
+    filtered_df = tab_df
+    if query:
+        filtered_df = tab_df[
+            tab_df["Series_Title"].str.lower().str.contains(query) |
+            tab_df["Genre"].str.lower().str.contains(query)
+        ]
+
+        suggestions = filtered_df["Series_Title"].head(5).tolist()
+        if suggestions:
+            st.markdown("<div style='border:1px solid #ccc;border-radius:5px;background:#fff;margin:-8px 0 10px 0;'>", unsafe_allow_html=True)
+            for i, s in enumerate(suggestions):
+                if st.button(s, key=f"{search_key}_sugg_{i}"):
+                    st.session_state[search_key] = s
+                    st.rerun()
+            st.markdown("</div>", unsafe_allow_html=True)
+
+    if not filtered_df.empty:
+        render_cards(filtered_df, watched_list, username, section, show_button, reason_map, signup_genres)
+    else:
+        st.warning("No results found.")
+
+# ===== Dashboard =====
 def dashboard_page():
     if st.session_state.get("scroll_to_top", False):
         st.markdown("<script>window.scrollTo({top: 0, behavior: 'instant'});</script>", unsafe_allow_html=True)
@@ -237,7 +265,7 @@ def dashboard_page():
 
     st.sidebar.checkbox("🌙 Dark Mode", key="dark_mode")
     st.write(f"### Welcome, {st.session_state.username}")
-    
+
     if st.button("🚪 Logout"):
         st.session_state.page, st.session_state.username = "login_signup", ""
         st.session_state.genres, st.session_state.watched, st.session_state.temp_selected_genres = [], [], []
@@ -245,63 +273,23 @@ def dashboard_page():
 
     tab1, tab2, tab3 = st.tabs(["⭐ Top Rated", "🎥 Your Watching", "🎯 Recommendations"])
 
-    # Tab 1 - Top Rated
     with tab1:
-     st.subheader("Top Rated Movies")
+        st.subheader("Top Rated Movies")
+        top_movies = df.sort_values(by="IMDB_Rating", ascending=False)
+        mixed_df = pd.concat([top_movies[top_movies['Genre'].str.contains(g, case=False)].head(3)
+                              for g in set(g for lst in df['Genre'].str.split(', ') for g in lst)]
+                             ).drop_duplicates("Series_Title")
+        mixed_df = mixed_df[~mixed_df['Series_Title'].isin(st.session_state.watched)].head(50)
+        live_search_tab(mixed_df, "top_search", st.session_state.watched, st.session_state.username, "top", signup_genres=st.session_state.genres)
 
-    # keep search value in session state so we can programmatically update
-    search_key = "search_top_q"
-    if search_key not in st.session_state:
-        st.session_state[search_key] = ""
-
-    # search input box
-    query = st.text_input("🔍 Search top movies...", value=st.session_state[search_key], key=search_key).strip().lower()
-
-    # dataset for this tab
-    top_movies = df.sort_values(by="IMDB_Rating", ascending=False)
-    mixed_df = pd.concat([
-        top_movies[top_movies['Genre'].str.contains(g, case=False)].head(3)
-        for g in set(g for lst in df['Genre'].str.split(', ') for g in lst)
-    ]).drop_duplicates("Series_Title")
-    mixed_df = mixed_df[~mixed_df['Series_Title'].isin(st.session_state.watched)].head(50)
-
-    # suggestions + live filtering
-    filtered_df = mixed_df
-    if query:
-        filtered_df = mixed_df[
-            mixed_df["Series_Title"].str.lower().str.contains(query) |
-            mixed_df["Genre"].str.lower().str.contains(query)
-        ]
-        # clickable dropdown suggestions box
-        suggestions = filtered_df["Series_Title"].head(5).tolist()
-        if suggestions:
-            st.markdown("<div style='border:1px solid #ccc;border-radius:5px;margin-top:-10px;margin-bottom:10px;background:white;'>", unsafe_allow_html=True)
-            for i, s in enumerate(suggestions):
-                if st.button(s, key=f"{search_key}_sugg_{i}"):
-                    st.session_state[search_key] = s
-                    st.rerun()
-            st.markdown("</div>", unsafe_allow_html=True)
-
-    render_cards(filtered_df, st.session_state.watched, st.session_state.username, "top", True, signup_genres=st.session_state.genres)
-
-
-    # Tab 2 - Watching
     with tab2:
-        search_query = st.text_input("🔍 Search your watched movies...", key="watch_q").strip().lower()
+        st.subheader("Your Watching List")
         watched_df = df[df['Series_Title'].isin(st.session_state.watched)]
-        if search_query:
-            suggestions = watched_df[watched_df["Series_Title"].str.lower().str.contains(search_query)]["Series_Title"].head(5).tolist()
-            for s in suggestions:
-                st.markdown(f"- {s}")
-            watched_df = watched_df[watched_df["Series_Title"].str.lower().str.contains(search_query) |
-                                    watched_df["Genre"].str.lower().str.contains(search_query)]
-        render_cards(watched_df, st.session_state.watched, st.session_state.username, "your", False, signup_genres=st.session_state.genres)
+        live_search_tab(watched_df, "watch_search", st.session_state.watched, st.session_state.username, "your", signup_genres=st.session_state.genres, show_button=False)
 
-    # Tab 3 - Recommendations
     with tab3:
-        search_query = st.text_input("🔍 Search recommended...", key="rec_q").strip().lower()
+        st.subheader("Recommended For You")
         recs = recommend_for_user(st.session_state.genres, st.session_state.watched, 10)
-
         reason_map = {}
         for idx, row in recs.iterrows():
             reasons = []
@@ -313,13 +301,7 @@ def dashboard_page():
                 reasons.append("You selected genre(s) " + ", ".join(genre_matches))
             reason_map[row['Series_Title']] = " and ".join(reasons) if reasons else None
 
-        if search_query:
-            suggestions = recs[recs["Series_Title"].str.lower().str.contains(search_query)]["Series_Title"].head(5).tolist()
-            for s in suggestions:
-                st.markdown(f"- {s}")
-            recs = recs[recs["Series_Title"].str.lower().str.contains(search_query) |
-                        recs["Genre"].str.lower().str.contains(search_query)]
-        render_cards(recs, st.session_state.watched, st.session_state.username, "rec", True, reason_map, signup_genres=st.session_state.genres)
+        live_search_tab(recs, "rec_search", st.session_state.watched, st.session_state.username, "rec", reason_map, signup_genres=st.session_state.genres)
 
 # ===== Routing =====
 if "page" not in st.session_state: st.session_state.page = "login_signup"
