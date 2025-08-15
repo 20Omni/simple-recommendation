@@ -4,7 +4,7 @@ import joblib
 import numpy as np
 import json, os
 from math import ceil
-
+from streamlit_searchbox import st_searchbox
 USER_DATA_FILE = "user_data.json"
 
 # ===== User Data Storage =====
@@ -275,15 +275,12 @@ def dashboard_page():
     tab1, tab2, tab3 = st.tabs(["⭐ Top Rated", "🎥 Your Watching", "🎯 Recommendations"])
 
     with tab1:
-        top_movies = df.sort_values(by="IMDB_Rating", ascending=False)
-        mixed_df = pd.concat([
-            top_movies[top_movies['Genre'].str.contains(g, case=False)].head(3)
-            for g in set(g for lst in df['Genre'].str.split(', ') for g in lst)
-        ]).drop_duplicates("Series_Title")
-        mixed_df = mixed_df[~mixed_df['Series_Title'].isin(st.session_state.watched)].head(50)
-
-        search_and_render(mixed_df, "top", st.session_state.watched, st.session_state.username, True, signup_genres=st.session_state.genres)
-
+    # Your movie df construction here...
+    selected_title = st_searchbox(search_top_movies, placeholder="Search top movies...")
+    if selected_title:
+        mixed_df = mixed_df[mixed_df['Series_Title'] == selected_title]
+    render_cards(mixed_df, st.session_state.watched, st.session_state.username, "top", True, signup_genres=st.session_state.genres)
+        
     with tab2:
          watched_df = df[df['Series_Title'].isin(st.session_state.watched)]
     if watched_df.empty:
