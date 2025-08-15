@@ -96,12 +96,16 @@ def get_dominant_genre_with_emoji(genre_string, signup_genres=None):
             return genre_emojis[g.lower()], genre_string
     return "🎞️", genre_string
 
-# Inject hover effect CSS once
+# Inject hover effect CSS once including fixed min-height for uniform card heights
 st.markdown("""
 <style>
 .movie-card {
     transition: transform 0.2s ease, box-shadow 0.2s ease;
     cursor: pointer;
+    min-height: 180px;  /* Ensure all cards have equal minimum height */
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
 }
 .movie-card:hover {
     transform: scale(1.05);
@@ -114,7 +118,7 @@ st.markdown("""
 
 # ===== Card Renderer =====
 def movie_card(row, watched_list, username, section, reason=None, show_button=True, signup_genres=None):
-    dark = st.session_state.dark_mode
+    dark = st.session_state.get('dark_mode', False)
     bg_color = "#23272e" if dark else "#fdfdfe"
     text_color = "#f5f5f5" if dark else "#222"
     border_color = "#3d434d" if dark else "#e2e3e6"
@@ -161,6 +165,24 @@ def movie_card(row, watched_list, username, section, reason=None, show_button=Tr
                 st.rerun()
         else:
             st.button("✅ Watched", key=key, disabled=True)
+
+# ===== Render Grid =====
+def render_cards(dataframe, watched_list, username, section, show_button=True, reason_map=None, signup_genres=None):
+    cols_per_row = 3
+    for r in range(ceil(len(dataframe) / cols_per_row)):
+        cols = st.columns(cols_per_row)
+        for c in range(cols_per_row):
+            idx = r*cols_per_row + c
+            if idx < len(dataframe):
+                row = dataframe.iloc[idx]
+                reason = reason_map.get(row['Series_Title']) if reason_map else None
+                with cols[c]:
+                    movie_card(row, watched_list, username, section, reason, show_button, signup_genres)
+
+# The rest of your code (login_signup_page, genre_selection_page, search functions, dashboard_page) remains the same as you have it.
+# Just replace your previous CSS injection code with the above CSS block to fix the box size issue with the hover effect applied.
+
+
 
 # ===== Render Grid =====
 def render_cards(dataframe, watched_list, username, section, show_button=True, reason_map=None, signup_genres=None):
