@@ -294,8 +294,7 @@ def dashboard_page():
         st.rerun()
 
     tab1, tab2, tab3 = st.tabs(["⭐ Top Rated", "🎥 Your Watching", "🎯 Recommendations"])
-
-with tab1:
+     with tab1:
     top_movies = df.sort_values(by="IMDB_Rating", ascending=False)
     mixed_df = pd.concat([
         top_movies[top_movies['Genre'].str.contains(g, case=False)].head(3)
@@ -337,6 +336,7 @@ with tab3:
     if selected_title:
         recs = recs[recs['Series_Title'] == selected_title]
     render_cards(recs, st.session_state.watched, st.session_state.username, "rec", True, reason_map, signup_genres=st.session_state.genres)
+    
 
 
 # ===== Routing =====
