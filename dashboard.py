@@ -260,7 +260,6 @@ def search_and_render(df_tab, section, watched_list, username, show_button=True,
 
 # ===== Dashboard Page =====
 def dashboard_page():
-    
     if st.session_state.get("scroll_to_top", False):
         st.markdown("<script>window.scrollTo({top: 0, behavior: 'instant'});</script>", unsafe_allow_html=True)
         st.session_state.scroll_to_top = False
@@ -275,25 +274,27 @@ def dashboard_page():
     tab1, tab2, tab3 = st.tabs(["⭐ Top Rated", "🎥 Your Watching", "🎯 Recommendations"])
 
     with tab1:
-    # Your movie df construction here...
-    selected_title = st_searchbox(search_top_movies, placeholder="Search top movies...")
-    if selected_title:
-        mixed_df = mixed_df[mixed_df['Series_Title'] == selected_title]
-    render_cards(mixed_df, st.session_state.watched, st.session_state.username, "top", True, signup_genres=st.session_state.genres)
-        
+        top_movies = df.sort_values(by="IMDB_Rating", ascending=False)
+        mixed_df = pd.concat([
+            top_movies[top_movies['Genre'].str.contains(g, case=False)].head(3)
+            for g in set(g for lst in df['Genre'].str.split(', ') for g in lst)
+        ]).drop_duplicates("Series_Title")
+        mixed_df = mixed_df[~mixed_df['Series_Title'].isin(st.session_state.watched)].head(50)
+
+        selected_title = st_searchbox(search_top_movies, placeholder="Search top movies...")
+        if selected_title:
+            mixed_df = mixed_df[mixed_df['Series_Title'] == selected_title]
+        render_cards(mixed_df, st.session_state.watched, st.session_state.username, "top", True, signup_genres=st.session_state.genres)
+
     with tab2:
-         watched_df = df[df['Series_Title'].isin(st.session_state.watched)]
-    if watched_df.empty:
-        st.info("You haven’t watched anything yet!")
-    else:
-        search_and_render(
-            watched_df,
-            "your",
-            st.session_state.watched,
-            st.session_state.username,
-            False,
-            signup_genres=st.session_state.genres
-        )
+        watched_df = df[df['Series_Title'].isin(st.session_state.watched)]
+        if watched_df.empty:
+            st.info("You haven’t watched anything yet!")
+        else:
+            selected_title = st_searchbox(search_watched_movies, placeholder="Search watched movies...")
+            if selected_title:
+                watched_df = watched_df[watched_df['Series_Title'] == selected_title]
+            render_cards(watched_df, st.session_state.watched, st.session_state.username, "your", False, signup_genres=st.session_state.genres)
 
     with tab3:
         recs = recommend_for_user(st.session_state.genres, st.session_state.watched, 10)
@@ -311,7 +312,10 @@ def dashboard_page():
                 reasons.append("You selected genre(s) " + ", ".join(genre_matches))
             reason_map[row['Series_Title']] = " and ".join(reasons) if reasons else None
 
-        search_and_render(recs, "rec", st.session_state.watched, st.session_state.username, True, reason_map, signup_genres=st.session_state.genres)
+        selected_title = st_searchbox(search_recommended_movies, placeholder="Search recommended movies...")
+        if selected_title:
+            recs = recs[recs['Series_Title'] == selected_title]
+        render_cards(recs, st.session_state.watched, st.session_state.username, "rec", True, reason_map, signup_genres=st.session_state.genres)
 
 # ===== Routing =====
 if "page" not in st.session_state: st.session_state.page = "login_signup"
