@@ -130,41 +130,48 @@ def movie_card(row, watched_list, username, section, reason=None, show_button=Tr
     genre_color = "#b2b2b2" if dark else "#5A5A5A"
     rating_color = "#fcb900"
     
-    # Get emoji + genre
+    # Genre
     emoji, genre_text = get_dominant_genre_with_emoji(row["Genre"], signup_genres)
     
-    # Handle certificate display
+    # Certificate
     cert_value = row["Certificate"] if pd.notna(row["Certificate"]) and str(row["Certificate"]).strip() else "UA"
     cert_value = cert_value.strip()
     
-    # Certificate color mapping
     cert_colors = {
-        "U": "#27ae60",   # Green
-        "UA": "#f39c12",  # Orange
-        "A": "#c0392b"    # Red
+        "U": "#27ae60",
+        "UA": "#f39c12",
+        "A": "#c0392b"
     }
-    cert_color = cert_colors.get(cert_value.upper(), "#7f8c8d")  # Default gray
+    cert_color = cert_colors.get(cert_value.upper(), "#7f8c8d")
     
     html = f'''
     <div class="movie-card" style="border:1.5px solid {border_color};
       border-radius:10px;padding:12px;
       background:{bg_color};color:{text_color};
-      box-shadow:0 2px 6px rgba(0,0,0,0.08);">
-        <div style="display:flex;align-items:center;justify-content:space-between;">
-            <div style="font-weight:700;font-size:1.1rem;">{row["Series_Title"]} ({row["Released_Year"]})</div>
-            <div style="background:{cert_color};color:white;
-                        padding:2px 8px;border-radius:6px;
-                        font-size:0.8rem;font-weight:bold;">
+      box-shadow:0 2px 6px rgba(0,0,0,0.08);
+      height: 180px; display: flex; flex-direction: column; justify-content: space-between;">
+        
+        <div>
+            <div style="font-weight:700;font-size:1.1rem;line-height:1.3;">
+                {row["Series_Title"]} ({row["Released_Year"]})
+            </div>
+            <div style="margin-top:4px; display:inline-block; background:{cert_color};color:white;
+                        padding:4px 10px;border-radius:6px;
+                        font-size:0.85rem;font-weight:bold;
+                        min-width:38px;text-align:center;">
                 {cert_value}
             </div>
         </div>
-        <div style="color:{genre_color};margin-bottom:5px;">
-            {emoji} <span style="font-style: italic;">{genre_text}</span>
+        
+        <div>
+            <div style="color:{genre_color};margin-top:6px;">
+                {emoji} <span style="font-style: italic;">{genre_text}</span>
+            </div>
+            <div style="color:{rating_color};margin-top:6px;">
+                ⭐ {row["IMDB_Rating"]:.1f}/10
+            </div>
+            {f'<div style="color:#399ed7;margin-top:6px;">💡 {reason}</div>' if reason else ""}
         </div>
-        <div style="color:{rating_color};margin-bottom:8px;">
-            ⭐ {row["IMDB_Rating"]:.1f}/10
-        </div>
-        {f'<div style="color:#399ed7;margin-bottom:8px;">💡 {reason}</div>' if reason else ""}
     </div>
     '''
     st.markdown(html, unsafe_allow_html=True)
@@ -172,7 +179,7 @@ def movie_card(row, watched_list, username, section, reason=None, show_button=Tr
     if show_button:
         key = f"watched_{section}_{row.name}"
         if row['Series_Title'] not in watched_list:
-            if st.button("✅ Watched", key=key, help="Mark this as watched"):
+            if st.button("✅ Watched", key=key):
                 watched_list.append(row['Series_Title'])
                 update_watched(username, watched_list)
                 st.rerun()
