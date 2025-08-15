@@ -137,6 +137,21 @@ def movie_card(row, watched_list, username, section, reason=None, show_button=Tr
     cert_colors = {"U": "#27ae60", "UA": "#f39c12", "A": "#c0392b"}
     cert_color = cert_colors.get(cert_value.upper(), "#7f8c8d")
 
+    # Format reason neatly
+    reason_html = ""
+    if reason:
+        parts = []
+        if "You watched" in reason:
+            watched_text = reason.split("You watched ")[1].split(" and ")[0]
+            if watched_text:
+                parts.append(f"🎬 Similar to: {watched_text}")
+        if "You selected genre(s)" in reason:
+            genre_text = reason.split("You selected genre(s) ")[1]
+            if genre_text:
+                parts.append(f"🎯 Matches your genre(s): {genre_text}")
+        if parts:
+            reason_html = "<div style='margin-top:8px;color:#399ed7;font-size:0.9rem;'>💡 Why recommended:<br>" + "<br>".join(parts) + "</div>"
+
     html = textwrap.dedent(f"""<div class="movie-card" style="border:1.5px solid {border_color};
 border-radius:10px;padding:12px;background:{bg_color};color:{text_color};
 box-shadow:0 2px 6px rgba(0,0,0,0.08);min-height:180px;height:auto;
@@ -160,7 +175,7 @@ overflow-wrap:break-word;word-break:break-word;white-space:normal;">
   <div style="color:{rating_color};margin-top:6px;">
     ⭐ {row["IMDB_Rating"]:.1f}/10
   </div>
-  {f'<div style="color:#399ed7;margin-top:6px;overflow-wrap:break-word;word-break:break-word;white-space:normal;">💡 {reason}</div>' if reason else ''}
+  {reason_html}
 </div>
 
 </div>""")
