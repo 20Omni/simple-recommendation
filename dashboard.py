@@ -287,14 +287,21 @@ def dashboard_page():
 
     # Styled welcome text
     st.markdown(
-        f"""
-        <h2 style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                   color: #333333; margin-bottom: 20px;">
-            Welcome, <span style="color:#1f77b4;">{st.session_state.username}</span>
-        </h2>
-        """,
-        unsafe_allow_html=True
-    )
+    f"""
+    <div style="
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        font-size: 32px;
+        font-weight: 700;
+        color: #1a73e8;
+        margin-bottom: 30px;
+        padding-top: 15px;
+    ">
+        Welcome, <span style="color: #0b47a1;">{st.session_state.username}</span>!
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
     tab1, tab2, tab3 = st.tabs(["⭐ Top Rated", "🎥 Your Watching", "🎯 Recommendations"])
 
     with tab1:
