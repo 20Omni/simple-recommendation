@@ -188,52 +188,36 @@ def genre_selection_page():
     st.subheader("Select Your Favourite Genres")
 
     all_genres = sorted(set(g for glist in df['Genre'].str.split(', ') for g in glist))
+
     if "temp_selected_genres" not in st.session_state:
         st.session_state.temp_selected_genres = []
 
-    st.markdown("""
-    <style>
-    .genre-grid {display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px;}
-    .genre-box {
-        width: 80px; height: 80px;
-        display: flex; flex-direction: column;
-        align-items: center; justify-content: center;
-        border-radius: 8px;
-        background: #f5f6fa; border: 2px solid #dadbe7;
-        cursor: pointer; transition: all 0.12s ease;
-        font-size: 0.8rem; text-align: center;
-    }
-    .genre-box.selected {
-        background: #1e4fff; color: white; border-color: #274ccf;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.15);
-    }
-    .genre-emoji {font-size: 1.4rem;}
-    </style>
-    """, unsafe_allow_html=True)
+    # Simple inline style toggle buttons
+    st.write("Click to select / deselect genres:")
 
-    st.markdown('<div class="genre-grid">', unsafe_allow_html=True)
     for genre in all_genres:
-        emoji = genre_emojis.get(genre.lower(),"🎞️")
+        emoji = genre_emojis.get(genre.lower(), "🎞️")
         selected = genre in st.session_state.temp_selected_genres
-        sel_class = "genre-box selected" if selected else "genre-box"
 
-        if st.button(f"{emoji} {genre}", key=f"btn_{genre}"):
-            if selected:
+        if selected:
+            btn_label = f"✅ {emoji} {genre}"
+            if st.button(btn_label, key=f"genre_{genre}"):
                 st.session_state.temp_selected_genres.remove(genre)
-            else:
+                st.rerun()
+        else:
+            btn_label = f"{emoji} {genre}"
+            if st.button(btn_label, key=f"genre_{genre}"):
                 st.session_state.temp_selected_genres.append(genre)
-            st.rerun()
+                st.rerun()
 
-        st.markdown(f'<div class="{sel_class}"><div class="genre-emoji">{emoji}</div>{genre}</div>', unsafe_allow_html=True)
-
-    st.markdown("</div>", unsafe_allow_html=True)
-
+    # Continue button
     if st.button("Next ➡️"):
         if st.session_state.temp_selected_genres:
             update_user_genres(st.session_state.username, st.session_state.temp_selected_genres)
             st.session_state.genres = st.session_state.temp_selected_genres.copy()
             st.session_state.scroll_to_top = True
-            st.session_state.page = "dashboard"; st.rerun()
+            st.session_state.page = "dashboard"
+            st.rerun()
         else:
             st.error("Please select at least one genre to continue.")
 
