@@ -96,6 +96,22 @@ def get_dominant_genre_with_emoji(genre_string, signup_genres=None):
             return genre_emojis[g.lower()], genre_string
     return "🎞️", genre_string
 
+# Inject hover effect CSS once
+st.markdown("""
+<style>
+.movie-card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    cursor: pointer;
+}
+.movie-card:hover {
+    transform: scale(1.05);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+    position: relative;
+    z-index: 10;
+}
+</style>
+""", unsafe_allow_html=True)
+
 # ===== Card Renderer =====
 def movie_card(row, watched_list, username, section, reason=None, show_button=True, signup_genres=None):
     dark = st.session_state.dark_mode
@@ -104,20 +120,18 @@ def movie_card(row, watched_list, username, section, reason=None, show_button=Tr
     border_color = "#3d434d" if dark else "#e2e3e6"
     genre_color = "#b2b2b2" if dark else "#5A5A5A"
     rating_color = "#fcb900"
-
     emoji, genre_text = get_dominant_genre_with_emoji(row["Genre"], signup_genres)
-
     html = f'''
-    <div style="border:1.5px solid {border_color};border-radius:10px;padding:12px;
+    <div class="movie-card" style="border:1.5px solid {border_color};border-radius:10px;padding:12px;
     margin-bottom:16px;background:{bg_color};color:{text_color};
     box-shadow:0 2px 6px rgba(0,0,0,0.08);">
         <div style="font-weight:700;font-size:1.1rem;">{row["Series_Title"]}</div>
         <div style="color:{genre_color};margin-bottom:5px;">{emoji} <span style="font-style: italic;">{genre_text}</span></div>
         <div style="color:{rating_color};margin-bottom:8px;">⭐ {row["IMDB_Rating"]:.1f}/10</div>
         {f'<div style="color:#399ed7;margin-bottom:8px;">💡 {reason}</div>' if reason else ""}
+    </div>
     '''
     st.markdown(html, unsafe_allow_html=True)
-
     if show_button:
         key = f"watched_{section}_{row.name}"
         st.markdown("""
@@ -165,7 +179,6 @@ def render_cards(dataframe, watched_list, username, section, show_button=True, r
 def login_signup_page():
     st.title("Movie Recommender – Login / Signup")
     opt = st.radio("Select option", ["Login", "Signup"], horizontal=True)
-    
     username = st.text_input("Username")
     password = st.text_input("Password", type="password")
     if opt == "Signup":
@@ -180,7 +193,7 @@ def login_signup_page():
                     st.rerun()
                 else:
                     st.error("Username already exists")
-    else:  # Login
+    else:
         if st.button("Login") and username and password:
             user = load_user(username)
             if user:
@@ -198,7 +211,6 @@ def login_signup_page():
 def genre_selection_page():
     st.title(f"Welcome, {st.session_state.username}!")
     st.subheader("Select Your Favourite Genres")
-
     all_genres = sorted(set(g for glist in df['Genre'].str.split(', ') for g in glist))
     if "temp_selected_genres" not in st.session_state:
         st.session_state.temp_selected_genres = []
@@ -215,7 +227,6 @@ def genre_selection_page():
                 else:
                     st.session_state.temp_selected_genres.append(genre)
                 st.rerun()
-
     if st.button("Next ➡️"):
         if st.session_state.temp_selected_genres:
             update_user_genres(st.session_state.username, st.session_state.temp_selected_genres)
@@ -250,27 +261,6 @@ def search_recommended_movies(searchterm: str):
                    recs["Genre"].str.lower().str.contains(searchterm.lower())]
     return results["Series_Title"].head(10).tolist()
 
-# ===== Search and render utility =====
-def search_and_render(df_tab, section, watched_list, username, show_button=True, reason_map=None, signup_genres=None):
-    search_key = f"search_{section}_input"
-    if search_key not in st.session_state:
-        st.session_state[search_key] = ""
-    query = st.text_input("🔍 Search for a movie or genre",
-                         value=st.session_state[search_key],
-                         key=search_key).strip().lower()
-
-    filtered_df = df_tab
-    if query:
-        filtered_df = df_tab[
-            df_tab["Series_Title"].str.lower().str.contains(query) |
-            df_tab["Genre"].str.lower().str.contains(query)
-        ]
-
-    if filtered_df.empty:
-        st.warning("No results found")
-    else:
-        render_cards(filtered_df, watched_list, username, section, show_button, reason_map, signup_genres)
-
 # ===== Dashboard Page =====
 def dashboard_page():
     if st.session_state.get("scroll_to_top", False):
@@ -278,21 +268,18 @@ def dashboard_page():
         st.session_state.scroll_to_top = False
 
     st.sidebar.checkbox("🌙 Dark Mode", key="dark_mode")
-
-    # Move logout button to sidebar
     if st.sidebar.button("🚪 Logout"):
         st.session_state.page, st.session_state.username = "login_signup", ""
         st.session_state.genres, st.session_state.watched, st.session_state.temp_selected_genres = [], [], []
         st.rerun()
 
-    # Styled welcome text
     st.markdown(
     f"""
     <div style="
         font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
         font-size: 36px;
         font-weight: 600;
-        color: #e74c3c;  /* Stylish red */
+        color: #e74c3c;
         margin-bottom: 25px;
         padding-top: 15px;
         letter-spacing: 1px;
@@ -301,8 +288,7 @@ def dashboard_page():
     </div>
     """,
     unsafe_allow_html=True
-)
-
+    )
 
     tab1, tab2, tab3 = st.tabs(["⭐ Top Rated", "🎥 Your Watching", "🎯 Recommendations"])
 
