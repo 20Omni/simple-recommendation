@@ -32,11 +32,14 @@ def init_db():
 init_db()
 
 # ===== Load model =====
-with open("hybrid_recommender.pkl", "rb") as f:
-    data = pickle.load(f)
+@st.cache_resource
+def load_model():
+    df = joblib.load("movies_df.pkl") 
+    cosine_sim = joblib.load("cosine_similarity.pkl")
+    indices = joblib.load("title_indices.pkl")
+    return df, cosine_sim, indices
 
-recommend_for_user_func = data["recommend_for_user"]
-movie_metadata = data["movie_metadata"]
+df, cosine_sim, indices = load_model()
 
 # ===== Helpers =====
 def add_user(username, password):
