@@ -149,7 +149,7 @@ def format_reason(reason: str) -> str:
 
     parts = ["<div style='margin-top:8px;color:#399ed7;font-size:0.9rem;'>💡 Why recommended:<br>"]
     if watched_movies:
-        parts.append("🎬 Similar to:<br>")
+        parts.append("🎬 You Watched :<br>")
         for m in watched_movies:
             parts.append(f"&nbsp;&nbsp;&nbsp;&nbsp;• {m}<br>")
     if genres:
