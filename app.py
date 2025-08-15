@@ -130,10 +130,8 @@ def movie_card(row, watched_list, username, section, reason=None, show_button=Tr
     genre_color = "#b2b2b2" if dark else "#5A5A5A"
     rating_color = "#fcb900"
     
-    # Genre
     emoji, genre_text = get_dominant_genre_with_emoji(row["Genre"], signup_genres)
     
-    # Certificate
     cert_value = row["Certificate"] if pd.notna(row["Certificate"]) and str(row["Certificate"]).strip() else "UA"
     cert_value = cert_value.strip()
     
@@ -151,14 +149,14 @@ def movie_card(row, watched_list, username, section, reason=None, show_button=Tr
       box-shadow:0 2px 6px rgba(0,0,0,0.08);
       height: 180px; display: flex; flex-direction: column; justify-content: space-between;">
         
-        <div>
-            <div style="font-weight:700;font-size:1.1rem;line-height:1.3;">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+            <div style="font-weight:700;font-size:1.1rem;line-height:1.3;flex:1;">
                 {row["Series_Title"]} ({row["Released_Year"]})
             </div>
-            <div style="margin-top:4px; display:inline-block; background:{cert_color};color:white;
-                        padding:4px 10px;border-radius:6px;
-                        font-size:0.85rem;font-weight:bold;
-                        min-width:38px;text-align:center;">
+            <div style="background:{cert_color};color:white;
+                        padding:2px 6px;border-radius:6px;
+                        font-size:0.75rem;font-weight:bold;
+                        min-width:32px;text-align:center; white-space:nowrap;">
                 {cert_value}
             </div>
         </div>
@@ -185,6 +183,7 @@ def movie_card(row, watched_list, username, section, reason=None, show_button=Tr
                 st.rerun()
         else:
             st.button("✅ Watched", key=key, disabled=True)
+
 
 # ===== Render Cards Grid =====
 def render_cards(dataframe, watched_list, username, section, show_button=True, reason_map=None, signup_genres=None):
