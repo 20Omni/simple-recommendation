@@ -329,29 +329,41 @@ def dashboard_page():
                 watched_df = watched_df[watched_df['Series_Title'] == selected_title]
             render_cards(watched_df, st.session_state.watched, st.session_state.username, "your", False, signup_genres=st.session_state.genres)
 
-    with tab3:
+        with tab3:
         recs = recommend_for_user(st.session_state.genres, st.session_state.watched, 10)
         reason_map = {}
-    for idx, row in recs.iterrows():
-        reason_html = ""
-        watched_reasons = [
-            w for w in st.session_state.watched
-            if w in indices and cosine_sim[indices[w]][idx] > 0.1
-        ]
-        if watched_reasons:
-            watched_list_html = "<br>".join(["• " + w for w in watched_reasons[:3]])
-            reason_html += "💡 You watched:<br>" + watched_list_html + "<br><br>"
-        genre_matches = [g for g in st.session_state.genres if g.lower() in row["Genre"].lower()][:3]
-        if genre_matches:
-            reason_html += "💡 You selected genre(s): " + ", ".join(genre_matches) + "<br><br>"
-        if reason_html:
-            reason_html += "📌 So we recommend this!"
-        reason_map[row['Series_Title']] = reason_html if reason_html else None
+        for idx, row in recs.iterrows():
+            reason_html = ""
+            watched_reasons = [
+                w for w in st.session_state.watched
+                if w in indices and cosine_sim[indices[w]][idx] > 0.1
+            ]
+            if watched_reasons:
+                watched_list_html = "<br>".join(["• " + w for w in watched_reasons[:3]])
+                reason_html += "💡 You watched:<br>" + watched_list_html + "<br><br>"
+            genre_matches = [g for g in st.session_state.genres if g.lower() in row["Genre"].lower()][:3]
+            if genre_matches:
+                reason_html += "💡 You selected genre(s): " + ", ".join(genre_matches) + "<br><br>"
+            if reason_html:
+                reason_html += "📌 So we recommend this!"
+            reason_map[row['Series_Title']] = reason_html if reason_html else None
 
-    selected_title = st_searchbox(search_recommended_movies, placeholder="Search recommended movies...", key="rec_searchbox")(search_recommended_movies, placeholder="Search recommended movies...", key="rec_searchbox")
+        selected_title = st_searchbox(
+            search_recommended_movies,
+            placeholder="Search recommended movies...",
+            key="rec_searchbox"
+        )
         if selected_title:
             recs = recs[recs['Series_Title'] == selected_title]
-        render_cards(recs, st.session_state.watched, st.session_state.username, "rec", True, reason_map, signup_genres=st.session_state.genres)
+        render_cards(
+            recs,
+            st.session_state.watched,
+            st.session_state.username,
+            "rec",
+            True,
+            reason_map,
+            signup_genres=st.session_state.genres
+        )
 
 # ===== Routing =====
 if "page" not in st.session_state:
