@@ -103,24 +103,52 @@ def movie_card(row, watched_list, username, section, reason=None, show_button=Tr
     border_color = "#3d434d" if dark else "#e2e3e6"
     genre_color = "#b2b2b2" if dark else "#5A5A5A"
     rating_color = "#fcb900"
+
     emoji, genre_text = get_dominant_genre_with_emoji(row["Genre"], signup_genres)
+
     html = f'''
     <div style="border:1.5px solid {border_color};border-radius:10px;padding:12px;
     margin-bottom:16px;background:{bg_color};color:{text_color};
     box-shadow:0 2px 6px rgba(0,0,0,0.08);">
-        <div style="font-weight:700;">{row["Series_Title"]}</div>
-        <div style="color:{genre_color};">{emoji} <span style="font-style: italic;">{genre_text}</span></div>
-        <div style="color:{rating_color};">⭐ {row["IMDB_Rating"]:.1f}/10</div>
-        {f'<div style="color:#399ed7;">💡 {reason}</div>' if reason else ""}
-    </div>
+        <div style="font-weight:700;font-size:1.1rem;">{row["Series_Title"]}</div>
+        <div style="color:{genre_color};margin-bottom:5px;">{emoji} <span style="font-style: italic;">{genre_text}</span></div>
+        <div style="color:{rating_color};margin-bottom:8px;">⭐ {row["IMDB_Rating"]:.1f}/10</div>
+        {f'<div style="color:#399ed7;margin-bottom:8px;">💡 {reason}</div>' if reason else ""}
     '''
+
     st.markdown(html, unsafe_allow_html=True)
+
     if show_button:
         key = f"watched_{section}_{row.name}"
+        btn_style = """
+            <style>
+            .watched-btn {
+                background-color: #4CAF50; 
+                color: white; 
+                padding: 6px 14px; 
+                font-size: 14px; 
+                border: none; 
+                border-radius: 6px; 
+                cursor: pointer;
+            }
+            .watched-btn:hover {
+                background-color: #45a049;
+            }
+            .watched-btn:disabled {
+                background-color: #888;
+                cursor: default;
+            }
+            </style>
+        """
+        st.markdown(btn_style, unsafe_allow_html=True)
+
         if row['Series_Title'] not in watched_list:
-            if st.button("Watched", key=key):
-                watched_list.append(row['Series_Title']); update_watched(username, watched_list); st.rerun()
-        else: st.button("Watched", key=key, disabled=True)
+            if st.button("✅ Watched", key=key, help="Mark this as watched"):
+                watched_list.append(row['Series_Title'])
+                update_watched(username, watched_list)
+                st.rerun()
+        else:
+            st.button("✅ Watched", key=key, disabled=True)
 
 # ===== Render Grid =====
 def render_cards(dataframe, watched_list, username, section, show_button=True, reason_map=None, signup_genres=None):
@@ -137,26 +165,37 @@ def render_cards(dataframe, watched_list, username, section, show_button=True, r
 
 # ===== Search with Live Suggestions =====
 def search_and_render(df_tab, search_key, watched_list, username, section, show_button=True, reason_map=None, signup_genres=None):
-    query = st.text_input("🔍 Search", key=search_key, placeholder="Type to search...").strip().lower()
+    query = st.text_input("🔍 Search for a movie or genre", key=f"{search_key}_input", placeholder="Type to search...").strip().lower()
+
     filtered_df = df_tab
+    suggestions = []
+
     if query:
         filtered_df = df_tab[df_tab["Series_Title"].str.lower().str.contains(query) |
-                             df_tab["Genre"].str.lower().str.contains(query)]
+                              df_tab["Genre"].str.lower().str.contains(query)]
         suggestions = filtered_df["Series_Title"].head(5).tolist()
-        if suggestions:
-            st.caption("Suggestions:")
-            cols = st.columns(len(suggestions))
-            for i, title in enumerate(suggestions):
-                if cols[i].button(title, key=f"sugg_{search_key}_{i}"):
-                    st.session_state[search_key] = title.lower()
-                    filtered_df = df_tab[df_tab["Series_Title"].str.lower() == title.lower()]
-        else:
-            st.warning("No results found")
-            return
-    if filtered_df.empty:
+
+    # --- Show Google-style suggestions ---
+    if query and suggestions:
+        st.markdown("<div style='background:white; border:1px solid #ccc; border-radius:5px; max-width:300px;'>", unsafe_allow_html=True)
+        for title in suggestions:
+            if st.button(f"🔎 {title}", key=f"sugg_{search_key}_{title}"):
+                filtered_df = df_tab[df_tab["Series_Title"].str.lower() == title.lower()]
+                query = title.lower()
+                st.session_state[f"{search_key}_input"] = title  # keep in box
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    if query and not suggestions:
         st.warning("No results found")
-    else:
+
+    if not query:
+        filtered_df = df_tab
+
+    if not filtered_df.empty:
         render_cards(filtered_df, watched_list, username, section, show_button, reason_map, signup_genres)
+    elif query:
+        st.warning("No results found.")
+
 
 # ===== Pages =====
 def login_signup_page():
