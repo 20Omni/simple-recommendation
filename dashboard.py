@@ -272,26 +272,44 @@ def dashboard_page():
 
     tab1, tab2, tab3 = st.tabs(["⭐ Top Rated", "🎥 Your Watching", "🎯 Recommendations"])
 
+    # ---------- TAB 1: TOP RATED ----------
     with tab1:
+        st.subheader("Top Rated Movies")
+        search_query = st.text_input("🔍 Search top movies...", key="search_top_live").strip().lower()
+
         top_movies = df.sort_values(by="IMDB_Rating", ascending=False)
-        mixed_df = pd.concat([top_movies[top_movies['Genre'].str.contains(g, case=False)].head(3)
-                              for g in set(g for lst in df['Genre'].str.split(', ') for g in lst)]
-                             ).drop_duplicates("Series_Title")
+        mixed_df = pd.concat([
+            top_movies[top_movies['Genre'].str.contains(g, case=False)].head(3)
+            for g in set(g for lst in df['Genre'].str.split(', ') for g in lst)
+        ]).drop_duplicates("Series_Title")
+
         mixed_df = mixed_df[~mixed_df['Series_Title'].isin(st.session_state.watched)].head(50)
 
-        selected_title = st_searchbox(search_top_movies, placeholder="Search top movies...")
-        if selected_title:
-            mixed_df = mixed_df[mixed_df['Series_Title'] == selected_title]
+        if search_query:
+            mixed_df = mixed_df[
+                mixed_df["Series_Title"].str.lower().str.contains(search_query) |
+                mixed_df["Genre"].str.lower().str.contains(search_query)
+            ]
         render_cards(mixed_df, st.session_state.watched, st.session_state.username, "top", True, signup_genres=st.session_state.genres)
 
+    # ---------- TAB 2: WATCHING ----------
     with tab2:
+        st.subheader("Your Watching List")
+        search_query = st.text_input("🔍 Search your watched movies...", key="search_watched_live").strip().lower()
+
         watched_df = df[df['Series_Title'].isin(st.session_state.watched)]
-        selected_title = st_searchbox(search_watched_movies, placeholder="Search watched movies...")
-        if selected_title:
-            watched_df = watched_df[watched_df['Series_Title'] == selected_title]
+        if search_query:
+            watched_df = watched_df[
+                watched_df["Series_Title"].str.lower().str.contains(search_query) |
+                watched_df["Genre"].str.lower().str.contains(search_query)
+            ]
         render_cards(watched_df, st.session_state.watched, st.session_state.username, "your", False, signup_genres=st.session_state.genres)
 
+    # ---------- TAB 3: RECOMMENDATIONS ----------
     with tab3:
+        st.subheader("Recommended For You")
+        search_query = st.text_input("🔍 Search recommended...", key="search_rec_live").strip().lower()
+
         recs = recommend_for_user(st.session_state.genres, st.session_state.watched, 10)
         reason_map = {}
         for idx, row in recs.iterrows():
@@ -304,9 +322,11 @@ def dashboard_page():
                 reasons.append("You selected genre(s) " + ", ".join(genre_matches))
             reason_map[row['Series_Title']] = " and ".join(reasons) if reasons else None
 
-        selected_title = st_searchbox(search_recommended_movies, placeholder="Search recommended movies...")
-        if selected_title:
-            recs = recs[recs["Series_Title"] == selected_title]
+        if search_query:
+            recs = recs[
+                recs["Series_Title"].str.lower().str.contains(search_query) |
+                recs["Genre"].str.lower().str.contains(search_query)
+            ]
         render_cards(recs, st.session_state.watched, st.session_state.username, "rec", True, reason_map, signup_genres=st.session_state.genres)
 
 # ===== Routing =====
