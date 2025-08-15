@@ -247,7 +247,7 @@ def dashboard_page():
 
     # Tab 1 - Top Rated
     with tab1:
-    st.subheader("Top Rated Movies")
+     st.subheader("Top Rated Movies")
 
     # keep search value in session state so we can programmatically update
     search_key = "search_top_q"
