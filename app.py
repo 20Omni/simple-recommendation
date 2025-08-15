@@ -263,13 +263,15 @@ def search_recommended_movies(searchterm: str):
 
 # ===== Dashboard Page =====
 def dashboard_page():
+    if "dark_mode" not in st.session_state:
+        st.session_state.dark_mode = False
     if st.session_state.get("scroll_to_top", False):
         st.markdown("<script>window.scrollTo({top: 0, behavior: 'instant'});</script>", unsafe_allow_html=True)
         st.session_state.scroll_to_top = False
 
     # Sidebar buttons: Dark Mode and Logout as buttons to keep consistent style
     if st.sidebar.button("🌙 Dark Mode"):
-        st.session_state.dark_mode = not st.session_state.get("dark_mode", False)
+        st.session_state.dark_mode = not st.session_state.dark_mode
     if st.sidebar.button("🚪 Logout"):
         st.session_state.page = "login_signup"
         st.session_state.username = ""
@@ -340,6 +342,7 @@ def dashboard_page():
         if selected_title:
             recs = recs[recs['Series_Title'] == selected_title]
         render_cards(recs, st.session_state.watched, st.session_state.username, "rec", True, reason_map, signup_genres=st.session_state.genres)
+
 
 # ===== Routing =====
 if "page" not in st.session_state: st.session_state.page = "login_signup"
