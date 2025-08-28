@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import joblib
-import numpy as np
+import numpy as 
 import json, os
 from math import ceil
 from streamlit_searchbox import st_searchbox
