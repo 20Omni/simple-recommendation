@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import joblib
 import numpy as np
-import json, os
+import json, os, textwrap
 from math import ceil
 from streamlit_searchbox import st_searchbox
 
@@ -26,7 +26,8 @@ def signup_user(username):
     save_user_data(data)
     return True
 
-def load_user(username): return load_user_data().get(username)
+def load_user(username):
+    return load_user_data().get(username)
 
 def update_user_genres(username, genres):
     data = load_user_data()
@@ -76,7 +77,7 @@ def recommend_for_user(preferred_genres, watched_titles, top_n=10):
     rec_df = df.iloc[np.argsort(scores)[::-1]]
     rec_df = rec_df[~rec_df['Series_Title'].isin(watched_titles)]
     signup_df = rec_df[rec_df['Genre'].str.contains('|'.join(preferred_genres), case=False)]
-    return pd.concat([signup_df.head(3), rec_df]).drop_duplicates().head(top_n)[['Series_Title','Genre','IMDB_Rating']]
+    return pd.concat([signup_df.head(3), rec_df]).drop_duplicates().head(top_n)[['Series_Title','Genre','IMDB_Rating','Certificate','Released_Year']]
 
 # ===== Emoji Mapping =====
 genre_emojis = {
@@ -84,6 +85,7 @@ genre_emojis = {
     "sci-fi":"👽","science fiction":"👽","adventure":"🧭","fantasy":"🦄","animation":"🐭",
     "documentary":"🎥","crime":"🕵️","mystery":"🕵️","war":"⚔️","musical":"🎶","music":"🎶"
 }
+
 def get_dominant_genre_with_emoji(genre_string, signup_genres=None):
     genres_list = [g.strip() for g in genre_string.split(",")]
     if signup_genres:
@@ -96,12 +98,19 @@ def get_dominant_genre_with_emoji(genre_string, signup_genres=None):
             return genre_emojis[g.lower()], genre_string
     return "🎞️", genre_string
 
-# Inject hover effect CSS once
+# ===== Inject CSS =====
 st.markdown("""
 <style>
 .movie-card {
     transition: transform 0.2s ease, box-shadow 0.2s ease;
     cursor: pointer;
+    min-height: 240px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    padding-bottom: 32px;
+    position: relative;
+    margin-bottom: 20px;
 }
 .movie-card:hover {
     transform: scale(1.05);
@@ -112,57 +121,126 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ===== Card Renderer =====
+# ===== Reason formatter (kept as you had) =====
+def format_reason(reason: str) -> str:
+    if not reason:
+        return ""
+    watched_movies, genres = [], []
+
+    # Extract watched movies
+    if "You watched" in reason:
+        try:
+            after = reason.split("You watched ", 1)[1]
+            watched_text = after.split(" and ", 1)[0] if " and " in after else after
+            watched_movies = [m.strip() for m in watched_text.split(",") if m.strip()]
+        except Exception:
+            pass
+
+    # Extract genres
+    if "You selected genre(s)" in reason:
+        try:
+            genre_text = reason.split("You selected genre(s) ", 1)[1]
+            genres = [g.strip() for g in genre_text.split(",") if g.strip()]
+        except Exception:
+            pass
+
+    if not watched_movies and not genres:
+        return ""
+
+    parts = ["<div style='margin-top:8px;color:#399ed7;font-size:0.9rem;'>💡 Why recommended:<br>"]
+    if watched_movies:
+        parts.append("🎬 You Watched :<br>")
+        for m in watched_movies:
+            parts.append(f"&nbsp;&nbsp;&nbsp;&nbsp;• {m}<br>")
+    if genres:
+        parts.append("🎯 Matches your genre(s):<br>")
+        for g in genres:
+            parts.append(f"&nbsp;&nbsp;&nbsp;&nbsp;• {g}<br>")
+    parts.append("</div>")
+    return "".join(parts)
+
+# ===== Card Renderer with Details (only change below) =====
 def movie_card(row, watched_list, username, section, reason=None, show_button=True, signup_genres=None):
-    dark = st.session_state.dark_mode
+    dark = st.session_state.get('dark_mode', False)
     bg_color = "#23272e" if dark else "#fdfdfe"
     text_color = "#f5f5f5" if dark else "#222"
     border_color = "#3d434d" if dark else "#e2e3e6"
     genre_color = "#b2b2b2" if dark else "#5A5A5A"
     rating_color = "#fcb900"
+    
     emoji, genre_text = get_dominant_genre_with_emoji(row["Genre"], signup_genres)
-    html = f'''
-    <div class="movie-card" style="border:1.5px solid {border_color};border-radius:10px;padding:12px;
-    margin-bottom:16px;background:{bg_color};color:{text_color};
-    box-shadow:0 2px 6px rgba(0,0,0,0.08);">
-        <div style="font-weight:700;font-size:1.1rem;">{row["Series_Title"]}</div>
-        <div style="color:{genre_color};margin-bottom:5px;">{emoji} <span style="font-style: italic;">{genre_text}</span></div>
-        <div style="color:{rating_color};margin-bottom:8px;">⭐ {row["IMDB_Rating"]:.1f}/10</div>
-        {f'<div style="color:#399ed7;margin-bottom:8px;">💡 {reason}</div>' if reason else ""}
-    </div>
-    '''
+    
+    cert_value = row["Certificate"] if pd.notna(row["Certificate"]) and str(row["Certificate"]).strip() else "UA"
+    cert_value = cert_value.strip()
+    cert_colors = {"U": "#27ae60", "UA": "#f39c12", "A": "#c0392b"}
+    cert_color = cert_colors.get(cert_value.upper(), "#7f8c8d")
+
+    # Format reason neatly
+    reason_html = format_reason(reason) if reason else ""
+
+    # --- CARD (unchanged visuals) ---
+    html = textwrap.dedent(f"""<div class="movie-card" style="border:1.5px solid {border_color};
+border-radius:10px;padding:12px;background:{bg_color};color:{text_color};
+box-shadow:0 2px 6px rgba(0,0,0,0.08);min-height:180px;height:auto;
+display:flex;flex-direction:column;justify-content:space-between;
+overflow-wrap:break-word;word-break:break-word;white-space:normal;">
+
+<div>
+  <div style="font-weight:700;font-size:1.1rem;line-height:1.3;">
+    {row["Series_Title"]} ({row["Released_Year"]})
+  </div>
+  <div style="display:inline-block;background:{cert_color};color:#fff;padding:4px 10px;border-radius:6px;
+              font-size:0.85rem;font-weight:bold;min-width:38px;text-align:center;margin-top:6px;">
+    {cert_value}
+  </div>
+</div>
+
+<div>
+  <div style="color:{genre_color};margin-top:6px;">
+    {emoji} <span style="font-style: italic;">{genre_text}</span>
+  </div>
+  <div style="color:{rating_color};margin-top:6px;">
+    ⭐ {row["IMDB_Rating"]:.1f}/10
+  </div>
+  {reason_html}
+</div>
+
+</div>""")
     st.markdown(html, unsafe_allow_html=True)
+
+    # --- NEW: Click-to-reveal details (expander) ---
+    # We look up full details from the master df by title.
+    _details = df.loc[df['Series_Title'] == row['Series_Title']]
+    if not _details.empty:
+        d = _details.iloc[0]
+        overview = d['Overview'] if pd.notna(d.get('Overview')) else "Not available."
+        runtime = d['Runtime'] if pd.notna(d.get('Runtime')) else "N/A"
+        stars = [d.get('Star1'), d.get('Star2'), d.get('Star3'), d.get('Star4')]
+        stars = [s for s in stars if pd.notna(s) and str(s).strip()]
+    else:
+        overview, runtime, stars = "Not available.", "N/A", []
+
+    with st.expander("🔎 View details", expanded=False):
+    # Keep it simple + clean; no images so layout stays compact
+    st.markdown(f"**Overview:** {overview}")
+    st.markdown(f"**Runtime:** {runtime}")
+    if stars:
+        st.markdown("**Stars:**")
+        for s in stars:
+            st.markdown(f"- {s}")
+
+
     if show_button:
         key = f"watched_{section}_{row.name}"
-        st.markdown("""
-            <style>
-            .watched-btn {
-                background-color: #4CAF50; 
-                color: white; 
-                padding: 6px 14px; 
-                font-size: 14px; 
-                border: none; 
-                border-radius: 6px; 
-                cursor: pointer;
-            }
-            .watched-btn:hover {
-                background-color: #45a049;
-            }
-            .watched-btn:disabled {
-                background-color: #888;
-                cursor: default;
-            }
-            </style>
-        """, unsafe_allow_html=True)
         if row['Series_Title'] not in watched_list:
-            if st.button("✅ Watched", key=key, help="Mark this as watched"):
+            if st.button("✅ Watched", key=key):
                 watched_list.append(row['Series_Title'])
                 update_watched(username, watched_list)
                 st.rerun()
         else:
             st.button("✅ Watched", key=key, disabled=True)
 
-# ===== Render Grid =====
+# ===== Render Cards Grid =====
 def render_cards(dataframe, watched_list, username, section, show_button=True, reason_map=None, signup_genres=None):
     cols_per_row = 3
     for r in range(ceil(len(dataframe) / cols_per_row)):
@@ -237,7 +315,7 @@ def genre_selection_page():
         else:
             st.error("Please select at least one genre to continue.")
 
-# ===== Search helper functions =====
+# ===== Search helpers =====
 def search_top_movies(searchterm: str):
     if not searchterm:
         return df.sort_values(by="IMDB_Rating", ascending=False)["Series_Title"].head(10).tolist()
@@ -263,18 +341,21 @@ def search_recommended_movies(searchterm: str):
 
 # ===== Dashboard Page =====
 def dashboard_page():
+    if "dark_mode" not in st.session_state:
+        st.session_state.dark_mode = False
     if st.session_state.get("scroll_to_top", False):
         st.markdown("<script>window.scrollTo({top: 0, behavior: 'instant'});</script>", unsafe_allow_html=True)
         st.session_state.scroll_to_top = False
-
-    st.sidebar.checkbox("🌙 Dark Mode", key="dark_mode")
+    if st.sidebar.button("🌙 Dark Mode"):
+        st.session_state.dark_mode = not st.session_state.dark_mode
     if st.sidebar.button("🚪 Logout"):
-        st.session_state.page, st.session_state.username = "login_signup", ""
-        st.session_state.genres, st.session_state.watched, st.session_state.temp_selected_genres = [], [], []
+        st.session_state.page = "login_signup"
+        st.session_state.username = ""
+        st.session_state.genres = []
+        st.session_state.watched = []
+        st.session_state.temp_selected_genres = []
         st.rerun()
-
-    st.markdown(
-    f"""
+    st.markdown(f"""
     <div style="
         font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
         font-size: 36px;
@@ -286,12 +367,9 @@ def dashboard_page():
     ">
         Welcome, {st.session_state.username}!
     </div>
-    """,
-    unsafe_allow_html=True
-    )
+    """, unsafe_allow_html=True)
 
     tab1, tab2, tab3 = st.tabs(["⭐ Top Rated", "🎥 Your Watching", "🎯 Recommendations"])
-
     with tab1:
         top_movies = df.sort_values(by="IMDB_Rating", ascending=False)
         mixed_df = pd.concat([
@@ -299,7 +377,6 @@ def dashboard_page():
             for g in set(g for lst in df['Genre'].str.split(', ') for g in lst)
         ]).drop_duplicates("Series_Title")
         mixed_df = mixed_df[~mixed_df['Series_Title'].isin(st.session_state.watched)].head(50)
-
         selected_title = st_searchbox(search_top_movies, placeholder="Search top movies...", key="top_searchbox")
         if selected_title:
             mixed_df = mixed_df[mixed_df['Series_Title'] == selected_title]
@@ -330,18 +407,24 @@ def dashboard_page():
             if genre_matches:
                 reasons.append("You selected genre(s) " + ", ".join(genre_matches))
             reason_map[row['Series_Title']] = " and ".join(reasons) if reasons else None
-
         selected_title = st_searchbox(search_recommended_movies, placeholder="Search recommended movies...", key="rec_searchbox")
         if selected_title:
             recs = recs[recs['Series_Title'] == selected_title]
         render_cards(recs, st.session_state.watched, st.session_state.username, "rec", True, reason_map, signup_genres=st.session_state.genres)
 
 # ===== Routing =====
-if "page" not in st.session_state: st.session_state.page = "login_signup"
-if "genres" not in st.session_state: st.session_state.genres = []
-if "watched" not in st.session_state: st.session_state.watched = []
-if "temp_selected_genres" not in st.session_state: st.session_state.temp_selected_genres = []
+if "page" not in st.session_state:
+    st.session_state.page = "login_signup"
+if "genres" not in st.session_state:
+    st.session_state.genres = []
+if "watched" not in st.session_state:
+    st.session_state.watched = []
+if "temp_selected_genres" not in st.session_state:
+    st.session_state.temp_selected_genres = []
 
-if st.session_state.page == "login_signup": login_signup_page()
-elif st.session_state.page == "genre_select": genre_selection_page()
-elif st.session_state.page == "dashboard": dashboard_page()
+if st.session_state.page == "login_signup":
+    login_signup_page()
+elif st.session_state.page == "genre_select":
+    genre_selection_page()
+elif st.session_state.page == "dashboard":
+    dashboard_page()
