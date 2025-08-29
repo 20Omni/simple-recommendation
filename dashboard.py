@@ -121,13 +121,12 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ===== Reason formatter (kept as you had) =====
+# ===== Reason formatter =====
 def format_reason(reason: str) -> str:
     if not reason:
         return ""
     watched_movies, genres = [], []
 
-    # Extract watched movies
     if "You watched" in reason:
         try:
             after = reason.split("You watched ", 1)[1]
@@ -136,7 +135,6 @@ def format_reason(reason: str) -> str:
         except Exception:
             pass
 
-    # Extract genres
     if "You selected genre(s)" in reason:
         try:
             genre_text = reason.split("You selected genre(s) ", 1)[1]
@@ -159,7 +157,7 @@ def format_reason(reason: str) -> str:
     parts.append("</div>")
     return "".join(parts)
 
-# ===== Card Renderer with Details (only change below) =====
+# ===== Card Renderer with Details =====
 def movie_card(row, watched_list, username, section, reason=None, show_button=True, signup_genres=None):
     dark = st.session_state.get('dark_mode', False)
     bg_color = "#23272e" if dark else "#fdfdfe"
@@ -175,10 +173,8 @@ def movie_card(row, watched_list, username, section, reason=None, show_button=Tr
     cert_colors = {"U": "#27ae60", "UA": "#f39c12", "A": "#c0392b"}
     cert_color = cert_colors.get(cert_value.upper(), "#7f8c8d")
 
-    # Format reason neatly
     reason_html = format_reason(reason) if reason else ""
 
-    # --- CARD (unchanged visuals) ---
     html = textwrap.dedent(f"""<div class="movie-card" style="border:1.5px solid {border_color};
 border-radius:10px;padding:12px;background:{bg_color};color:{text_color};
 box-shadow:0 2px 6px rgba(0,0,0,0.08);min-height:180px;height:auto;
@@ -208,27 +204,26 @@ overflow-wrap:break-word;word-break:break-word;white-space:normal;">
 </div>""")
     st.markdown(html, unsafe_allow_html=True)
 
-    # --- NEW: Click-to-reveal details (expander) ---
-    # We look up full details from the master df by title.
+    # --- Expander: Show Overview, Runtime, Stars ---
     _details = df.loc[df['Series_Title'] == row['Series_Title']]
     if not _details.empty:
         d = _details.iloc[0]
         overview = d['Overview'] if pd.notna(d.get('Overview')) else "Not available."
-        runtime = d['Runtime'] if pd.notna(d.get('Runtime')) else "N/A"
+        runtime = str(d['Runtime']).strip() if pd.notna(d.get('Runtime')) else "N/A"
+        if runtime != "N/A" and "min" not in runtime.lower():
+            runtime = runtime + " min"
         stars = [d.get('Star1'), d.get('Star2'), d.get('Star3'), d.get('Star4')]
         stars = [s for s in stars if pd.notna(s) and str(s).strip()]
     else:
         overview, runtime, stars = "Not available.", "N/A", []
 
     with st.expander("🔎 View details", expanded=False):
-    # Keep it simple + clean; no images so layout stays compact
-    st.markdown(f"**Overview:** {overview}")
-    st.markdown(f"**Runtime:** {runtime}")
-    if stars:
-        st.markdown("**Stars:**")
-        for s in stars:
-            st.markdown(f"- {s}")
-
+        st.markdown(f"**Overview:** {overview}")
+        st.markdown(f"**Runtime:** {runtime}")
+        if stars:
+            st.markdown("**Stars:**")
+            for s in stars:
+                st.markdown(f"- {s}")
 
     if show_button:
         key = f"watched_{section}_{row.name}"
@@ -391,6 +386,8 @@ def dashboard_page():
             if selected_title:
                 watched_df = watched_df[watched_df['Series_Title'] == selected_title]
             render_cards(watched_df, st.session_state.watched, st.session_state.username, "your", False, signup_genres=st.session_state.genres)
+
+    
 
     with tab3:
         recs = recommend_for_user(st.session_state.genres, st.session_state.watched, 10)
