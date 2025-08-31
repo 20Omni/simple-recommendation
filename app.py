@@ -9,6 +9,12 @@ from streamlit_searchbox import st_searchbox
 
 USER_DATA_FILE = "user_data.json"
 
+# ===== Load FontAwesome (reliable icons instead of emoji boxes) =====
+st.markdown(
+    "<link rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css'>",
+    unsafe_allow_html=True,
+)
+
 # ===== User Data Storage =====
 def load_user_data():
     if os.path.exists(USER_DATA_FILE):
@@ -20,7 +26,7 @@ def save_user_data(data):
     with open(USER_DATA_FILE, "w") as f:
         json.dump(data, f)
 
-def signup_user(username):  
+def signup_user(username):
     data = load_user_data()
     if username in data: return False
     data[username] = {"genres": [], "watched": []}
@@ -59,18 +65,15 @@ def recommend_for_user(preferred_genres, watched_titles, top_n=10):
     elif watched_titles: genre_weight, watch_weight = 0.5, 3.5
     else: genre_weight, watch_weight = 2.0, 0.0
 
-    # genre boost
     for genre in preferred_genres:
         scores[df['Genre'].str.contains(genre, case=False, na=False)] += genre_weight
 
-    # similarity boost from watched
     for title in watched_titles:
         if title in indices:
             idx = indices[title]
             sim_vec = cosine_sim[idx].mean(axis=0) if isinstance(idx,(pd.Series,list,np.ndarray)) else cosine_sim[idx]
             scores += watch_weight * sim_vec
 
-    # mark watched indices as -inf
     watched_idx = []
     for t in watched_titles:
         if t in indices:
@@ -91,7 +94,7 @@ def recommend_for_user(preferred_genres, watched_titles, top_n=10):
     rec_df = pd.concat([signup_df.head(3), rec_df]).drop_duplicates()
     return rec_df.head(top_n)[['Series_Title','Genre','IMDB_Rating','Certificate','Released_Year']]
 
-# ===== Emoji Mapping =====
+# ===== Emoji / Icon mapping =====
 genre_emojis = {
     "action":"🎬","comedy":"😂","drama":"🎭","romance":"❤️","thriller":"🔪","horror":"👻",
     "sci-fi":"👽","science fiction":"👽","adventure":"🧭","fantasy":"🦄","animation":"🐭",
@@ -113,7 +116,7 @@ def get_dominant_genre_with_emoji(genre_string, signup_genres=None):
 # ===== Base CSS (cards/buttons) =====
 st.markdown("""
 <style>
-/* keep base hover/card transition */
+/* base card/button styles */
 .movie-card {
     transition: transform 0.25s ease, box-shadow 0.25s ease;
     cursor: pointer;
@@ -143,6 +146,13 @@ div[data-testid="stButton"] > button[kind="primary"]{
 div[data-testid="stButton"] > button[kind="primary"]:hover{
     background:#e64444;
 }
+
+/* small classes for animations */
+.pulse { animation: pulse 1.6s ease-in-out infinite; display:inline-block; }
+.bounce { animation: bounce 1.1s ease-in-out infinite; display:inline-block; }
+
+@keyframes pulse { 0% { transform: scale(1);} 50% { transform: scale(1.16);} 100% { transform: scale(1);} }
+@keyframes bounce { 0%,100% { transform: translateY(0);} 50% { transform: translateY(-8px);} }
 </style>
 """, unsafe_allow_html=True)
 
@@ -194,11 +204,9 @@ def apply_theme(choice: str):
     st.session_state["_card_text"] = theme["text_color"]
     st.session_state["_header_bg"] = theme["header_bg"]
 
-    # prepare background css (image fallback to gradient already in theme['image'] or theme['bg'])
     if theme["image"]:
         bg_css = f"background-image: {theme['overlay']}, url('{theme['image']}'); background-size: cover; background-position: center; background-attachment: fixed;"
     else:
-        # fallback gradient or the overlay as base
         bg_css = f"background: {theme['overlay']};"
 
     st.markdown(f"""
@@ -216,7 +224,6 @@ def apply_theme(choice: str):
         pointer-events: none;
     }}
 
-    /* Header glass */
     .header-box {{
         backdrop-filter: blur(8px);
         -webkit-backdrop-filter: blur(8px);
@@ -227,7 +234,6 @@ def apply_theme(choice: str):
         box-shadow: 0 10px 30px rgba(0,0,0,0.35);
     }}
 
-    /* Chip */
     .genre-chip-custom {{
       background: {theme['chip']};
       color: { '#111' if choice == 'Popcorn Fun 🍿' else '#fff' };
@@ -240,7 +246,6 @@ def apply_theme(choice: str):
       backdrop-filter: blur(4px);
     }}
 
-    /* micro animations */
     @keyframes fadeUp {{
         from {{ opacity: 0; transform: translateY(18px); }}
         to   {{ opacity: 1; transform: translateY(0); }}
@@ -257,7 +262,6 @@ def apply_theme(choice: str):
     }}
     .bounce {{ animation: bounce 1.1s ease-in-out infinite; display:inline-block; }}
 
-    /* small tweaks to tabs/buttons */
     button[role="tab"] {{
         border-radius: 999px !important;
         padding: 8px 14px !important;
@@ -277,7 +281,7 @@ def time_greeting(username):
         prefix = "Good Evening"
     return f"{prefix}, {username} 🍿 ready for a movie night?"
 
-# ===== Reason formatter (kept) =====
+# ===== Reason formatter =====
 def format_reason(reason: str) -> str:
     if not reason:
         return ""
@@ -313,7 +317,7 @@ def format_reason(reason: str) -> str:
     parts.append("</div>")
     return "".join(parts)
 
-# ===== Card Renderer with Details (uses theme variables) =====
+# ===== Card Renderer with Details (fixed to avoid Markdown code-block) =====
 def movie_card(row, watched_list, username, section, reason=None, show_button=True, signup_genres=None):
     # pick colors from session (applied theme)
     card_bg = st.session_state.get("_card_bg", "#fdfdfe")
@@ -331,34 +335,37 @@ def movie_card(row, watched_list, username, section, reason=None, show_button=Tr
 
     reason_html = format_reason(reason) if reason else ""
 
-    # inline styles for card use theme values
-    html = textwrap.dedent(f"""<div class="movie-card card-animate" style="border:1.8px solid {border_color};
+    # build HTML and IMPORTANT: strip leading whitespace so Streamlit doesn't treat it as a code block
+    html = textwrap.dedent(f"""\
+    <div class="movie-card card-animate" style="border:1.8px solid {border_color};
     border-radius:12px;padding:14px;background:{card_bg};color:{text_color};
     box-shadow:0 6px 18px rgba(0,0,0,0.12);min-height:160px;height:auto;
     display:flex;flex-direction:column;justify-content:space-between;
     overflow-wrap:break-word;word-break:break-word;white-space:normal;">
-
-    <div>
-      <div style="font-weight:800;font-size:1.05rem;line-height:1.25;color:{text_color};">
-        {row["Series_Title"]} <span style="color:rgba(255,255,255,0.5);font-weight:600;">({row["Released_Year"]})</span>
+      <div>
+        <div style="font-weight:800;font-size:1.05rem;line-height:1.25;color:{text_color};">
+          {row["Series_Title"]} <span style="color:rgba(255,255,255,0.5);font-weight:600;">({row["Released_Year"]})</span>
+        </div>
+        <div style="display:inline-block;background:{cert_color};color:#fff;padding:5px 10px;border-radius:8px;
+                    font-size:0.85rem;font-weight:700;min-width:44px;text-align:center;margin-top:8px;">
+          {cert_value}
+        </div>
       </div>
-      <div style="display:inline-block;background:{cert_color};color:#fff;padding:5px 10px;border-radius:8px;
-                  font-size:0.85rem;font-weight:700;min-width:44px;text-align:center;margin-top:8px;">
-        {cert_value}
+
+      <div>
+        <div style="color:{genre_color};margin-top:10px;">
+          <!-- Using FontAwesome film icon + fallback emoji -->
+          <i class="fa-solid fa-film" aria-hidden="true" style="margin-right:6px;"></i>
+          <span style="font-style: italic;">{genre_text}</span>
+        </div>
+        <div style="color:{rating_color};margin-top:8px;font-weight:700;">
+          <span class='pulse'><i class="fa-solid fa-star"></i></span> {row["IMDB_Rating"]:.1f}/10
+        </div>
+        {reason_html}
       </div>
     </div>
+    """).strip()  # <-- strip leading/trailing whitespace to prevent Markdown turning it into a code block
 
-    <div>
-      <div style="color:{genre_color};margin-top:10px;">
-        {emoji} <span style="font-style: italic;">{genre_text}</span>
-      </div>
-      <div style="color:{rating_color};margin-top:8px;font-weight:700;">
-        <span class='pulse'>⭐</span> {row["IMDB_Rating"]:.1f}/10
-      </div>
-      {reason_html}
-    </div>
-
-    </div>""")
     st.markdown(html, unsafe_allow_html=True)
 
     _details = df.loc[df['Series_Title'] == row['Series_Title']]
@@ -524,7 +531,7 @@ def dashboard_page():
     <div class="header-box" style="background:{header_bg}; margin-bottom:14px;">
       <h1 style="margin:0;font-weight:900;letter-spacing:.3px;font-size:34px;">{greeting}</h1>
       <div style="margin-top:8px;font-size:20px;">
-        <span class="bounce">🍿</span> &nbsp; <span class="pulse">⭐</span>
+        <span class="bounce"><i class="fa-solid fa-popcorn"></i></span> &nbsp; <span class="pulse"><i class="fa-solid fa-star"></i></span>
       </div>
     </div>
     """, unsafe_allow_html=True)
