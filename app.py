@@ -72,100 +72,44 @@ def get_dominant_genre_with_emoji(genre_string, signup_genres=None):
     return "🎞️", genre_string
 
 # ===== THEME + ANIMATIONS =====
-def apply_theme(theme_choice:str):
-    # page background based on theme
-    if theme_choice == "🎬 Classic":
-        bg_css = "linear-gradient(135deg, #2c3e50 0%, #4ca1af 100%)"
-        chip_bg = "#ffffff22"
-    elif theme_choice == "🌙 Dark":
-        bg_css = "linear-gradient(135deg, #000000 0%, #1a1a1a 100%)"
-        chip_bg = "#ffffff22"
-    else:  # 🌈 Vibrant
-        bg_css = "linear-gradient(135deg, #ff4b1f 0%, #1fddff 100%)"
-        chip_bg = "#00000022"
+def apply_theme(theme_choice):
+    if theme_choice == "🎭 Cinematic Curtain":
+        st.markdown("""
+            <style>
+            body {
+                background: url('https://i.ibb.co/6mKk5yx/red-curtain.jpg') no-repeat center center fixed;
+                background-size: cover;
+                color: white;
+            }
+            </style>
+        """, unsafe_allow_html=True)
 
-    st.session_state["_chip_bg"] = chip_bg
+    elif theme_choice == "🌌 Galaxy Night":
+        st.markdown("""
+            <style>
+            body {
+                background: url('https://i.ibb.co/nfXkMZc/galaxy.jpg') no-repeat center center fixed;
+                background-size: cover;
+                color: #e0e0ff;
+                text-shadow: 0px 0px 6px #a06bff;
+            }
+            </style>
+        """, unsafe_allow_html=True)
 
-    st.markdown(f"""
-    <style>
-      /* App background */
-      .stApp {{
-        background: {bg_css} fixed;
-        background-size: cover;
-      }}
+    elif theme_choice == "💡 Neon Glow":
+        st.markdown("""
+            <style>
+            body {
+                background: #000000;
+                background-image: radial-gradient(circle at top left, #ff00ff, transparent),
+                                  radial-gradient(circle at bottom right, #00ffff, transparent);
+                background-attachment: fixed;
+                color: #fff;
+                text-shadow: 0px 0px 6px #ff00ff;
+            }
+            </style>
+        """, unsafe_allow_html=True)
 
-      /* Smooth tabs look */
-      button[role="tab"] {{
-        border-radius: 999px !important;
-        padding: 8px 14px !important;
-        font-weight: 600 !important;
-      }}
-
-      /* Card base + hover already existed; we keep and enhance */
-      .movie-card {{
-          transition: transform 0.35s ease, box-shadow 0.35s ease;
-          cursor: pointer;
-          min-height: 240px;
-          display: flex;
-          flex-direction: column;
-          justify-content: flex-start;
-          padding-bottom: 32px;
-          position: relative;
-          margin-bottom: 20px;
-          opacity: 0;                 /* for animation start */
-          transform: translateY(24px); /* for animation start */
-      }}
-      .movie-card:hover {{
-          transform: translateY(-4px) scale(1.03);
-          box-shadow: 0 12px 28px rgba(0,0,0,0.35);
-          position: relative;
-          z-index: 10;
-      }}
-
-      /* Entrance animation */
-      @keyframes fadeUp {{
-          from {{ opacity: 0; transform: translateY(24px); }}
-          to   {{ opacity: 1; transform: translateY(0); }}
-      }}
-      .card-animate {{
-          animation: fadeUp 700ms ease forwards;
-      }}
-
-      /* Pulse for IMDb star */
-      @keyframes pulse {{
-          0%   {{ transform: scale(1);    }}
-          50%  {{ transform: scale(1.18); }}
-          100% {{ transform: scale(1);    }}
-      }}
-      .pulse {{
-          display:inline-block;
-          animation: pulse 1.6s ease-in-out infinite;
-          transform-origin:center;
-      }}
-
-      /* Bounce for popcorn */
-      @keyframes bounce {{
-          0%,100% {{ transform: translateY(0); }}
-          50%     {{ transform: translateY(-8px); }}
-      }}
-      .bounce {{
-          display:inline-block;
-          animation: bounce 1.1s ease-in-out infinite;
-      }}
-
-      /* Primary buttons retain your style */
-      div[data-testid="stButton"] > button[kind="primary"]{{
-          background:#ff4b4b;
-          color:#fff;
-          border-radius:999px;
-          font-weight:700;
-          box-shadow:0 2px 6px rgba(0,0,0,0.2);
-      }}
-      div[data-testid="stButton"] > button[kind="primary"]:hover{{
-          background:#e64444;
-      }}
-    </style>
-    """, unsafe_allow_html=True)
 
 def time_greeting(username:str):
     h = datetime.now().hour
@@ -447,8 +391,9 @@ def dashboard_page():
         st.session_state.scroll_to_top = False
 
     # Theme selector (new) + optional dark toggle (kept if you still want it)
-    theme_choice = st.sidebar.selectbox("🎨 Theme", ["🎬 Classic", "🌙 Dark", "🌈 Vibrant"])
-    apply_theme(theme_choice)
+    theme_choice = st.sidebar.radio("🎨 Choose Theme", 
+                                ["🎭 Cinematic Curtain", "🌌 Galaxy Night", "💡 Neon Glow"])
+
 
     if st.sidebar.button("🌙 Toggle Card Dark Mode"):
         st.session_state.dark_mode = not st.session_state.dark_mode
