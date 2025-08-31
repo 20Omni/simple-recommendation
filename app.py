@@ -5,6 +5,7 @@ import numpy as np
 import json, os, textwrap
 from math import ceil
 from streamlit_searchbox import st_searchbox
+from datetime import datetime   # 👈 Added for greeting
 
 USER_DATA_FILE = "user_data.json"
 
@@ -353,6 +354,16 @@ def search_recommended_movies(searchterm: str):
                    recs["Genre"].str.lower().str.contains(str(searchterm).lower())]
     return results["Series_Title"].head(10).tolist()
 
+# ===== Greeting helper =====
+def get_greeting():
+    hour = datetime.now().hour
+    if hour < 12:
+        return "Good Morning"
+    elif hour < 18:
+        return "Good Afternoon"
+    else:
+        return "Good Evening"
+
 # ===== Dashboard Page =====
 def dashboard_page():
     if "dark_mode" not in st.session_state:
@@ -369,13 +380,23 @@ def dashboard_page():
         st.session_state.watched = []
         st.session_state.temp_selected_genres = []
         st.rerun()
+
+    # 👇 Changed Greeting
+    greeting = get_greeting()
+    username = st.session_state.username
     st.markdown(f"""
-    <div style="font-size: 36px;font-weight: 600;color: #e74c3c;margin-bottom: 25px;padding-top: 15px;">
-        Welcome, {st.session_state.username}!
+    <div style="font-size: 32px;font-weight: 700;color: #ffffff;
+                margin-bottom: 25px;padding: 20px;
+                background: linear-gradient(90deg, #d31027, #ea384d);
+                border-radius: 12px;text-align:center;">
+        {greeting}, {username} 🍿 ready for a movie night?
     </div>
     """, unsafe_allow_html=True)
 
     tab1, tab2, tab3 = st.tabs(["⭐ Top Rated", "🎥 Your Watching", "🎯 Recommendations"])
+
+    
+       
 
     with tab1:
         top_movies = df.sort_values(by="IMDB_Rating", ascending=False)
