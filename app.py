@@ -138,44 +138,29 @@ div[data-testid="stButton"] > button[kind="primary"]:hover{
 </style>
 """, unsafe_allow_html=True)
 
-# ===== Reason formatter =====
-def format_reason(reason: str) -> str:
-    if not reason:
-        return ""
-    watched_movies, genres = [], []
+# ===== Search helpers =====
+def search_top_movies(searchterm: str):
+    if not searchterm:
+        return df.sort_values(by="IMDB_Rating", ascending=False)["Series_Title"].head(10).tolist()
+    results = df[df["Series_Title"].str.lower().str.contains(str(searchterm).lower()) |
+                 df["Genre"].str.lower().str.contains(str(searchterm).lower())]
+    return results["Series_Title"].head(10).tolist()
 
-    if "You watched" in reason:
-        try:
-            after = reason.split("You watched ", 1)[1]
-            watched_text = after.split(" and ", 1)[0] if " and " in after else after
-            watched_movies = [m.strip() for m in watched_text.split(",") if m.strip()]
-        except Exception:
-            pass
+def search_watched_movies(searchterm: str):
+    watched_df = df[df['Series_Title'].isin(st.session_state.watched)]
+    if not searchterm:
+        return watched_df["Series_Title"].tolist()
+    results = watched_df[watched_df["Series_Title"].str.lower().str.contains(str(searchterm).lower()) |
+                         watched_df["Genre"].str.lower().str.contains(str(searchterm).lower())]
+    return results["Series_Title"].head(10).tolist()
 
-    if "You selected genre(s)" in reason:
-        try:
-            genre_text = reason.split("You selected genre(s) ", 1)[1]
-            genres = [g.strip() for g in genre_text.split(",") if g.strip()]
-        except Exception:
-            pass
-
-    if not watched_movies and not genres:
-        return ""
-
-    parts = ["<div style='margin-top:8px;color:#399ed7;font-size:0.9rem;'>💡 Why recommended:<br>"]
-    if watched_movies:
-        parts.append("🎬 You Watched :<br>")
-        for m in watched_movies:
-            parts.append(f"&nbsp;&nbsp;&nbsp;&nbsp;• {m}<br>")
-    if genres:
-        parts.append("🎯 Matches your genre(s):<br>")
-        for g in genres:
-            parts.append(f"&nbsp;&nbsp;&nbsp;&nbsp;• {g}<br>")
-    parts.append("</div>")
-    return "".join(parts)
-
-# ===== Card Renderer with Details =====
-# ... (unchanged movie_card, render_cards, login_signup_page, genre_selection_page, search helpers) ...
+def search_recommended_movies(searchterm: str):
+    recs = recommend_for_user(st.session_state.genres, st.session_state.watched, 10)
+    if not searchterm:
+        return recs["Series_Title"].tolist()
+    results = recs[recs["Series_Title"].str.lower().str.contains(str(searchterm).lower()) |
+                   recs["Genre"].str.lower().str.contains(str(searchterm).lower())]
+    return results["Series_Title"].head(10).tolist()
 
 # ===== Dashboard Page =====
 def dashboard_page():
@@ -210,6 +195,7 @@ def dashboard_page():
         {greeting}, {st.session_state.username} 🍿 ready for a movie night?
     </div>
     """, unsafe_allow_html=True)
+
 
     tab1, tab2, tab3 = st.tabs(["⭐ Top Rated", "🎥 Your Watching", "🎯 Recommendations"])
 
