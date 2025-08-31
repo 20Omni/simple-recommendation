@@ -71,99 +71,150 @@ def get_dominant_genre_with_emoji(genre_string, signup_genres=None):
             return genre_emojis[g.lower()], genre_string
     return "🎞️", genre_string
 
-# ===== THEME + ANIMATIONS =====
-def apply_theme(theme_choice):
-    if theme_choice == "🎭 Cinematic Curtain":
-        st.markdown("""
-            <style>
-            body {
-                background: url('https://i.ibb.co/6mKk5yx/red-curtain.jpg') no-repeat center center fixed;
-                background-size: cover;
-                color: white;
-            }
-            </style>
-        """, unsafe_allow_html=True)
-
-    elif theme_choice == "🌌 Galaxy Night":
-        st.markdown("""
-            <style>
-            body {
-                background: url('https://i.ibb.co/nfXkMZc/galaxy.jpg') no-repeat center center fixed;
-                background-size: cover;
-                color: #e0e0ff;
-                text-shadow: 0px 0px 6px #a06bff;
-            }
-            </style>
-        """, unsafe_allow_html=True)
-
-    elif theme_choice == "💡 Neon Glow":
-        st.markdown("""
-            <style>
-            body {
-                background: #000000;
-                background-image: radial-gradient(circle at top left, #ff00ff, transparent),
-                                  radial-gradient(circle at bottom right, #00ffff, transparent);
-                background-attachment: fixed;
-                color: #fff;
-                text-shadow: 0px 0px 6px #ff00ff;
-            }
-            </style>
-        """, unsafe_allow_html=True)
-
-
-def time_greeting(username:str):
-    h = datetime.now().hour
-    if h < 12:
-        text = "Good Morning"
-        banner = "linear-gradient(90deg,#ffb347,#ffcc33)"
-    elif h < 18:
-        text = "Good Afternoon"
-        banner = "linear-gradient(90deg,#ff944b,#ff4b4b)"
-    else:
-        text = "Good Evening"
-        banner = "linear-gradient(90deg,#2c3e50,#4ca1af)"
-    return f"{text}, {username} 🍿 ready for a movie night?", banner
-
-# ===== Inject CSS (kept your original + merged with animations) =====
+# ===== Base CSS (keeps your original card/button styles) =====
 st.markdown("""
 <style>
-/* kept minimal; most styles moved into apply_theme() */
+.movie-card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    cursor: pointer;
+    min-height: 240px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    padding-bottom: 32px;
+    position: relative;
+    margin-bottom: 20px;
+    opacity: 1;
+}
+.movie-card:hover {
+    transform: scale(1.05);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+    position: relative;
+    z-index: 10;
+}
+div[data-testid="stButton"] > button[kind="primary"]{
+    background:#ff4b4b;
+    color:#fff;
+    border-radius:999px;
+    font-weight:700;
+    box-shadow:0 2px 6px rgba(0,0,0,0.2);
+}
+div[data-testid="stButton"] > button[kind="primary"]:hover{
+    background:#e64444;
+}
 </style>
 """, unsafe_allow_html=True)
 
-# ===== Recommendation Logic =====
-def recommend_for_user(preferred_genres, watched_titles, top_n=10):
-    scores = np.zeros(len(df))
-    if len(watched_titles) >= 3: genre_weight, watch_weight = 0.3, 4.0
-    elif watched_titles: genre_weight, watch_weight = 0.5, 3.5
-    else: genre_weight, watch_weight = 2.0, 0.0
+# ===== Premium Theme function (uses .stApp + overlay + fallbacks) =====
+def apply_premium_theme(choice: str):
+    """
+    Three premium themes:
+     - 🎭 Cinematic Curtain (red theater curtain image + overlay)
+     - 🌌 Galaxy Night (galaxy image + violet overlay)
+     - 💡 Neon Glow (dark with neon radial gradients)
+    If images fail to load the CSS also includes gradient fallbacks.
+    """
+    if choice == "🎭 Cinematic Curtain":
+        # curtain image hosted on free image host (fallback gradient included)
+        image_url = "https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=2000&q=80"
+        overlay = "linear-gradient(180deg, rgba(0,0,0,0.45), rgba(0,0,0,0.6))"
+        chip_bg = "rgba(0,0,0,0.25)"
+    elif choice == "🌌 Galaxy Night":
+        image_url = "https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?auto=format&fit=crop&w=2000&q=80"
+        overlay = "linear-gradient(180deg, rgba(5,5,25,0.45), rgba(10,10,40,0.6))"
+        chip_bg = "rgba(0,0,0,0.28)"
+    else:  # "💡 Neon Glow"
+        image_url = ""
+        overlay = ""
+        chip_bg = "rgba(0,0,0,0.28)"
 
-    for genre in preferred_genres:
-        scores[df['Genre'].str.contains(genre, case=False, na=False)] += genre_weight
-
-    for title in watched_titles:
-        if title in indices:
-            idx = indices[title]
-            sim_vec = cosine_sim[idx].mean(axis=0) if isinstance(idx,(pd.Series,list,np.ndarray)) else cosine_sim[idx]
-            scores += watch_weight * sim_vec
-
-    watched_idx = []
-    for t in watched_titles:
-        if t in indices:
-            idx_val = indices[t]
-            watched_idx.extend(idx_val if isinstance(idx_val,(pd.Series,list,np.ndarray)) else [idx_val])
-
-    scores[watched_idx] = -1
-    rec_df = df.iloc[np.argsort(scores)[::-1]]
-    rec_df = rec_df[~rec_df['Series_Title'].isin(watched_titles)]
-
-    if preferred_genres:
-        signup_df = rec_df[rec_df['Genre'].str.contains('|'.join(preferred_genres), case=False, na=False)]
+    # Safe CSS: use image + gradient fallback. .stApp target works in Streamlit.
+    if image_url:
+        background_css = f"""
+            background-image: {overlay}, url('{image_url}');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+        """
     else:
-        signup_df = rec_df.head(0)
+        # neon gradient fallback for no-image theme
+        background_css = "background: radial-gradient(circle at 10% 20%, #ff2d95 0%, transparent 10%), radial-gradient(circle at 90% 80%, #04e5ff 0%, transparent 10%), #000000;"
 
-    rec_df = pd.concat([signup_df.head(3), rec_df]).drop_duplicates()
-    return rec_df.head(top_n)[['Series_Title','Genre','IMDB_Rating','Certificate','Released_Year']]
+    st.session_state["_chip_bg"] = chip_bg
+
+    st.markdown(f"""
+    <style>
+    .stApp {{
+        {background_css}
+        color: #f0f0f0;
+        transition: background 0.6s ease;
+    }}
+    /* subtle overlay to ensure cards/readability */
+    .stApp::before {{
+        content: '';
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.22);
+        pointer-events: none;
+    }}
+
+    /* Entrance / micro animations */
+    @keyframes fadeUp {{
+        from {{ opacity: 0; transform: translateY(18px); }}
+        to   {{ opacity: 1; transform: translateY(0); }}
+    }}
+    .card-animate {{
+        animation: fadeUp 620ms cubic-bezier(.2,.9,.2,1) both;
+    }}
+
+    /* Pulse & bounce */
+    @keyframes pulse {{
+      0% {{ transform: scale(1); }} 50% {{ transform: scale(1.18); }} 100% {{ transform: scale(1); }}
+    }}
+    .pulse {{ animation: pulse 1.6s ease-in-out infinite; display:inline-block; }}
+
+    @keyframes bounce {{
+      0%,100% {{ transform: translateY(0); }} 50% {{ transform: translateY(-8px); }}
+    }}
+    .bounce {{ animation: bounce 1.1s ease-in-out infinite; display:inline-block; }}
+
+    /* chip style override (uses session stored chip-bg) */
+    .genre-chip-custom {{
+      background: {chip_bg};
+      color: #fff;
+      padding: 6px 12px;
+      border-radius: 16px;
+      margin: 6px;
+      display: inline-block;
+      border: 1px solid rgba(255,255,255,0.08);
+      font-weight: 700;
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+    }}
+
+    /* Make tabs pill-like */
+    button[role="tab"] {{
+      border-radius: 999px !important;
+      padding: 8px 14px !important;
+      font-weight: 700 !important;
+    }}
+    </style>
+    """, unsafe_allow_html=True)
+
+# ===== Time-based greeting =====
+def time_greeting(username):
+    h = datetime.now().hour
+    if h < 12:
+        prefix = "Good Morning"
+        banner = "linear-gradient(90deg,#ffd49a,#ffb347)"
+    elif h < 18:
+        prefix = "Good Afternoon"
+        banner = "linear-gradient(90deg,#ff9a76,#ff5c4d)"
+    else:
+        prefix = "Good Evening"
+        banner = "linear-gradient(90deg,#2b2d42,#4b6cb7)"
+    return f"{prefix}, {username} 🍿 ready for a movie night?", banner
 
 # ===== Reason formatter =====
 def format_reason(reason: str) -> str:
@@ -220,17 +271,17 @@ def movie_card(row, watched_list, username, section, reason=None, show_button=Tr
     reason_html = format_reason(reason) if reason else ""
 
     html = textwrap.dedent(f"""<div class="movie-card card-animate" style="border:1.5px solid {border_color};
-border-radius:14px;padding:12px;background:{bg_color};color:{text_color};
-box-shadow:0 2px 10px rgba(0,0,0,0.12);min-height:180px;height:auto;
+border-radius:10px;padding:12px;background:{bg_color};color:{text_color};
+box-shadow:0 2px 6px rgba(0,0,0,0.08);min-height:180px;height:auto;
 display:flex;flex-direction:column;justify-content:space-between;
 overflow-wrap:break-word;word-break:break-word;white-space:normal;">
 
 <div>
-  <div style="font-weight:800;font-size:1.12rem;line-height:1.3;">
+  <div style="font-weight:700;font-size:1.1rem;line-height:1.3;">
     {row["Series_Title"]} ({row["Released_Year"]})
   </div>
-  <div style="display:inline-block;background:{cert_color};color:#fff;padding:4px 10px;border-radius:8px;
-              font-size:0.85rem;font-weight:700;min-width:38px;text-align:center;margin-top:6px;">
+  <div style="display:inline-block;background:{cert_color};color:#fff;padding:4px 10px;border-radius:6px;
+              font-size:0.85rem;font-weight:bold;min-width:38px;text-align:center;margin-top:6px;">
     {cert_value}
   </div>
 </div>
@@ -239,8 +290,8 @@ overflow-wrap:break-word;word-break:break-word;white-space:normal;">
   <div style="color:{genre_color};margin-top:6px;">
     {emoji} <span style="font-style: italic;">{genre_text}</span>
   </div>
-  <div style="color:{rating_color};margin-top:6px;font-weight:700;">
-    <span class="pulse">⭐</span> {row["IMDB_Rating"]:.1f}/10
+  <div style="color:{rating_color};margin-top:6px;">
+    <span class='pulse'>⭐</span> {row["IMDB_Rating"]:.1f}/10
   </div>
   {reason_html}
 </div>
@@ -383,14 +434,13 @@ def search_recommended_movies(searchterm: str):
 
 # ===== Dashboard Page =====
 def dashboard_page():
-    # keep your dark_mode flag (if you want to reuse for card colors)
     if "dark_mode" not in st.session_state:
         st.session_state.dark_mode = False
     if st.session_state.get("scroll_to_top", False):
         st.markdown("<script>window.scrollTo({top: 0, behavior: 'instant'});</script>", unsafe_allow_html=True)
         st.session_state.scroll_to_top = False
 
-    # Theme selector (new) + optional dark toggle (kept if you still want it)
+    # New premium theme picker (radio makes preview/apply immediate)
     theme_choice = st.sidebar.radio("🎨 Theme", ["🎭 Cinematic Curtain", "🌌 Galaxy Night", "💡 Neon Glow"])
     apply_premium_theme(theme_choice)
 
@@ -404,7 +454,7 @@ def dashboard_page():
         st.session_state.temp_selected_genres = []
         st.rerun()
 
-    # ===== Personalized Header (time-based) =====
+    # Personalized header (time based) with subtle banner
     greeting, banner_bg = time_greeting(st.session_state.username or "Movie Buff")
     st.markdown(f"""
     <div style="background:{banner_bg};
@@ -412,23 +462,19 @@ def dashboard_page():
                 box-shadow:0 6px 18px rgba(0,0,0,0.25);">
         <h1 style="margin:0;font-weight:900;letter-spacing:.3px;">{greeting}</h1>
         <div style="margin-top:8px;font-size:20px;opacity:.95;">
-            <span class="bounce">🍿</span> <span class="pulse">⭐</span>
+            <span class="bounce">🍿</span> <span style="margin-left:10px;" class="pulse">⭐</span>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
-    # ===== Favorite Genres as Chips (pills) =====
+    # Favorite genres as chips (uses chip bg from theme function)
     if st.session_state.genres:
-        chip_bg = st.session_state.get("_chip_bg", "#ffffff22")
+        chip_bg = st.session_state.get("_chip_bg", "rgba(255,255,255,0.12)")
         chips_html = " ".join([
-            f"<span style='background:{chip_bg};backdrop-filter:blur(2px);color:white;padding:6px 12px;border-radius:16px;margin:6px;display:inline-block;border:1px solid rgba(255,255,255,.25);font-weight:600;'>{g}</span>"
+            f"<span class='genre-chip-custom'>{g}</span>"
             for g in st.session_state.genres
         ])
-        st.markdown(f"""
-            <div style='text-align:center;margin-top:12px;'>
-                {chips_html}
-            </div>
-        """, unsafe_allow_html=True)
+        st.markdown(f"<div style='text-align:center;margin-top:12px;'>{chips_html}</div>", unsafe_allow_html=True)
 
     tab1, tab2, tab3 = st.tabs(["⭐ Top Rated", "🎥 Your Watching", "🎯 Recommendations"])
 
