@@ -391,9 +391,8 @@ def dashboard_page():
         st.session_state.scroll_to_top = False
 
     # Theme selector (new) + optional dark toggle (kept if you still want it)
-    theme_choice = st.sidebar.radio("🎨 Choose Theme", 
-                                ["🎭 Cinematic Curtain", "🌌 Galaxy Night", "💡 Neon Glow"])
-
+    theme_choice = st.sidebar.radio("🎨 Theme", ["🎭 Cinematic Curtain", "🌌 Galaxy Night", "💡 Neon Glow"])
+    apply_premium_theme(theme_choice)
 
     if st.sidebar.button("🌙 Toggle Card Dark Mode"):
         st.session_state.dark_mode = not st.session_state.dark_mode
